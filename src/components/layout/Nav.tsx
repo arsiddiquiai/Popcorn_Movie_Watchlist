@@ -1,4 +1,5 @@
 import { NavLink, useLocation } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthProvider'
 import { Logo } from './Logo'
 
 type Accent = 'accent-cold' | 'accent-warm'
@@ -56,6 +57,7 @@ function isGroupActive(group: NavGroup, pathname: string) {
 
 export function Nav() {
   const { pathname } = useLocation()
+  const { user, signOut } = useAuth()
   const activeGroup = groups.find((group) => isGroupActive(group, pathname))
 
   return (
@@ -123,6 +125,21 @@ export function Nav() {
           </li>
         ))}
       </ul>
+
+      {user && (
+        <div className="flex items-center justify-between gap-2 border-t border-muted/15 pt-4">
+          <span className="min-w-0 truncate font-ui text-xs text-muted" title={user.email ?? undefined}>
+            {user.email}
+          </span>
+          <button
+            type="button"
+            onClick={() => void signOut()}
+            className="shrink-0 rounded-lg px-2 py-1 font-ui text-xs text-muted transition-colors duration-[var(--transition-fast)] hover:text-text"
+          >
+            Log out
+          </button>
+        </div>
+      )}
     </nav>
   )
 }

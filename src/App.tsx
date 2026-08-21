@@ -1,5 +1,7 @@
-import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { AppShell } from './components/layout/AppShell'
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
+import { AuthGate } from './auth/AuthGate'
+import { AuthProvider } from './auth/AuthProvider'
+import { ProtectedLayout } from './auth/ProtectedLayout'
 import CinemaBridge from './routes/CinemaBridge'
 import PickForMe from './routes/PickForMe'
 import Search from './routes/Search'
@@ -10,20 +12,28 @@ import { ThemeProvider } from './theme/ThemeProvider'
 
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <AppShell>
+    <AuthProvider>
+      <ThemeProvider>
+        <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Watchlist />} />
-            <Route path="/search" element={<Search />} />
-            <Route path="/bridge" element={<CinemaBridge />} />
-            <Route path="/pick" element={<PickForMe />} />
-            <Route path="/taste" element={<TasteDNA />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/auth" element={<AuthGate />} />
+            <Route element={<ProtectedLayout />}>
+              <Route path="/" element={<Watchlist />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/bridge" element={<CinemaBridge />} />
+              <Route path="/pick" element={<PickForMe />} />
+              <Route path="/taste" element={<TasteDNA />} />
+              <Route path="/settings" element={<Settings />} />
+              {/* Unmatched paths land here. ProtectedLayout (the parent
+                  route) runs its auth check first, so a logged-out visit
+                  to an unknown path — e.g. /watchlist — still redirects to
+                  /auth rather than rendering nothing. */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
           </Routes>
-        </AppShell>
-      </BrowserRouter>
-    </ThemeProvider>
+        </BrowserRouter>
+      </ThemeProvider>
+    </AuthProvider>
   )
 }
 
