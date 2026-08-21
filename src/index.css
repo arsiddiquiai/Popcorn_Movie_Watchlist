@@ -1,0 +1,92 @@
+@import "tailwindcss";
+
+/*
+  Theme values live as plain custom properties (matching the names used
+  throughout CLAUDE.md) so they can be referenced directly with var(...)
+  anywhere, including nested data-theme scopes used for live previews
+  (see Settings). The @theme block below aliases them into Tailwind's
+  --color-* / --font-* namespaces so utilities like bg-bg, text-muted,
+  bg-accent-warm/10 and font-display stay in sync automatically.
+*/
+
+:root {
+  color-scheme: dark;
+
+  /* nightcap (dark, default) */
+  --bg: #0b0b0f;
+  --surface: #16161d;
+  --text: #f2f0ec;
+  --muted: #8a8a96;
+  --accent-warm: #f5b841;
+  --accent-cold: #5b7fa8;
+
+  --transition-fast: 150ms;
+  --transition-base: 300ms;
+  --transition-slow: 600ms;
+  --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Not scoped to :root so a nested element can carry its own data-theme
+   attribute and preview that theme's colours locally (used for the
+   theme-switcher swatches in Settings). */
+[data-theme='daylight'] {
+  color-scheme: light;
+  --bg: #faf8f4;
+  --surface: #ffffff;
+  --text: #16161d;
+  --muted: #6b6b76;
+}
+
+[data-theme='cinema'] {
+  color-scheme: dark;
+  --bg: #000000;
+  --surface: #0a0a0a;
+  --text: #e8e6e2;
+  --muted: #6a6a72;
+}
+
+:root[data-reduced-motion='true'] {
+  --transition-fast: 0.01ms;
+  --transition-base: 0.01ms;
+  --transition-slow: 0.01ms;
+}
+
+:root[data-reduced-motion='true'] *,
+:root[data-reduced-motion='true'] *::before,
+:root[data-reduced-motion='true'] *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-accent-warm: var(--accent-warm);
+  --color-accent-cold: var(--accent-cold);
+
+  /* Declared here (Tailwind's --font-* namespace) rather than in :root
+     above, since a var() alias with the same name would self-reference.
+     Tailwind emits @theme entries as real :root custom properties, so
+     var(--font-display) / var(--font-ui) still work anywhere. */
+  --font-display: 'Archivo Black', 'Arial Black', sans-serif;
+  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  transition:
+    background-color var(--transition-base) var(--ease-standard),
+    color var(--transition-base) var(--ease-standard);
+}

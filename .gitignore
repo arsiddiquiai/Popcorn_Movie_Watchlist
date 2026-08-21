@@ -1,0 +1,35 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment / secrets — never commit real values.
+.env
+.env.*
+!.env.example
+*.env
+
+# Stray credential/notes files found in this repo at scaffold time —
+# ignored by exact name as a belt-and-braces measure. Prefer moving these
+# out of the project directory entirely.
+PW file for popcorn project.txt
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
