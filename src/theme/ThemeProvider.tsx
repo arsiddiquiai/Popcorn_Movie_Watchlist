@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { MotionConfig } from 'framer-motion'
 import { useAuth } from '../auth/AuthProvider'
+import type { Profile } from '../lib/database.types'
 import { supabase } from '../lib/supabaseClient'
 import type { Theme, ThemeContextValue } from './types'
 
@@ -61,11 +62,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     let cancelled = false
 
     void (async () => {
+      // supabase-js can't parse a multi-column select string into a
+      // precise type, so it falls back to `never` — override it
+      // explicitly with the slice of Profile these columns actually are.
       const { data } = await supabase
         .from('profiles')
         .select('theme_pref, reduced_motion')
         .eq('id', userId)
-        .single()
+        .single<Pick<Profile, 'theme_pref' | 'reduced_motion'>>()
 
       if (cancelled) return
       if (data) {
