@@ -3,6 +3,7 @@ import { AuthGate } from './auth/AuthGate'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedLayout } from './auth/ProtectedLayout'
 import CinemaBridge from './routes/CinemaBridge'
+import MovieDetail from './routes/MovieDetail'
 import PickForMe from './routes/PickForMe'
 import Search from './routes/Search'
 import Settings from './routes/Settings'
@@ -20,6 +21,7 @@ function App() {
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />
+              <Route path="/movie/:tmdbId" element={<MovieDetail />} />
               <Route path="/bridge" element={<CinemaBridge />} />
               <Route path="/pick" element={<PickForMe />} />
               <Route path="/taste" element={<TasteDNA />} />

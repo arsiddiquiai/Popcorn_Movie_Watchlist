@@ -13,11 +13,13 @@ export type TmdbErrorKind = 'network' | 'rate_limit' | 'api'
 
 export class TmdbError extends Error {
   kind: TmdbErrorKind
+  status?: number
 
-  constructor(message: string, kind: TmdbErrorKind) {
+  constructor(message: string, kind: TmdbErrorKind, status?: number) {
     super(message)
     this.name = 'TmdbError'
     this.kind = kind
+    this.status = status
   }
 }
 
@@ -38,14 +40,17 @@ async function tmdbFetch<T>(path: string, params: Record<string, string> = {}, s
     throw new TmdbError('TMDB rate limit reached. Try again in a moment.', 'rate_limit')
   }
   if (!response.ok) {
-    throw new TmdbError(`TMDB request failed (${response.status}).`, 'api')
+    throw new TmdbError(`TMDB request failed (${response.status}).`, 'api', response.status)
   }
 
   return (await response.json()) as T
 }
 
 /** Absolute image URL for a TMDB poster/backdrop path, or null if there is none. */
-export function tmdbImageUrl(path: string | null, size: 'w185' | 'w342' | 'w500' | 'original' = 'w342'): string | null {
+export function tmdbImageUrl(
+  path: string | null,
+  size: 'w185' | 'w342' | 'w500' | 'w1280' | 'original' = 'w342',
+): string | null {
   if (!path) return null
   return `${TMDB_IMAGE_BASE_URL}/${size}${path}`
 }
