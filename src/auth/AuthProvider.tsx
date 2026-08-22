@@ -44,6 +44,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut()
   }
 
+  async function resetPassword(email: string) {
+    // Falls back to the current origin if VITE_APP_URL isn't set, so this
+    // works locally without any extra config and still respects an
+    // explicit app URL (e.g. a custom domain) once deployed.
+    const appUrl = import.meta.env.VITE_APP_URL || window.location.origin
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${appUrl}/reset-password`,
+    })
+    return { error: error ? error.message : null }
+  }
+
   const value: AuthContextValue = {
     user: session?.user ?? null,
     session,
@@ -51,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     signUp,
     signIn,
     signOut,
+    resetPassword,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

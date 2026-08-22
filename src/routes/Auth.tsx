@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth/AuthProvider'
 import { Logo } from '../components/layout/Logo'
 
-type Mode = 'login' | 'signup'
+type Mode = 'login' | 'signup' | 'forgot'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -12,7 +12,7 @@ interface FieldErrors {
 }
 
 export default function Auth() {
-  const { signUp, signIn } = useAuth()
+  const { signUp, signIn, resetPassword } = useAuth()
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -32,7 +32,7 @@ export default function Auth() {
   function validate(): boolean {
     const errors: FieldErrors = {}
     if (!EMAIL_RE.test(email)) errors.email = 'Enter a valid email address.'
-    if (password.length < 6) errors.password = 'Password must be at least 6 characters.'
+    if (mode !== 'forgot' && password.length < 6) errors.password = 'Password must be at least 6 characters.'
     setFieldErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -44,6 +44,17 @@ export default function Auth() {
     if (!validate()) return
 
     setSubmitting(true)
+
+    if (mode === 'forgot') {
+      const { error } = await resetPassword(email)
+      setSubmitting(false)
+      if (error) {
+        setFormError(error)
+        return
+      }
+      setInfoMessage('Check your inbox for a link to reset your password.')
+      return
+    }
 
     if (mode === 'signup') {
       const { error, needsEmailConfirmation } = await signUp(email, password, displayName || undefined)
@@ -72,26 +83,30 @@ export default function Auth() {
           <Logo />
         </div>
 
-        <div className="mb-6 flex rounded-lg border border-muted/20 p-1">
-          <button
-            type="button"
-            onClick={() => switchMode('login')}
-            className={`flex-1 rounded-md py-1.5 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
-              mode === 'login' ? 'bg-bg font-semibold text-text' : 'text-muted'
-            }`}
-          >
-            Log in
-          </button>
-          <button
-            type="button"
-            onClick={() => switchMode('signup')}
-            className={`flex-1 rounded-md py-1.5 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
-              mode === 'signup' ? 'bg-bg font-semibold text-text' : 'text-muted'
-            }`}
-          >
-            Sign up
-          </button>
-        </div>
+        {mode === 'forgot' ? (
+          <h1 className="mb-6 text-center font-display text-lg text-text">Reset your password</h1>
+        ) : (
+          <div className="mb-6 flex rounded-lg border border-muted/20 p-1">
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              className={`flex-1 rounded-md py-1.5 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                mode === 'login' ? 'bg-bg font-semibold text-text' : 'text-muted'
+              }`}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('signup')}
+              className={`flex-1 rounded-md py-1.5 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                mode === 'signup' ? 'bg-bg font-semibold text-text' : 'text-muted'
+              }`}
+            >
+              Sign up
+            </button>
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
           {mode === 'signup' && (
@@ -125,20 +140,31 @@ export default function Auth() {
             {fieldErrors.email && <p className="font-ui text-xs text-accent-cold">{fieldErrors.email}</p>}
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="password" className="font-ui text-xs text-muted">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="rounded-lg border border-muted/25 bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
-            />
-            {fieldErrors.password && <p className="font-ui text-xs text-accent-cold">{fieldErrors.password}</p>}
-          </div>
+          {mode !== 'forgot' && (
+            <div className="flex flex-col gap-1.5">
+              <label htmlFor="password" className="font-ui text-xs text-muted">
+                Password
+              </label>
+              <input
+                id="password"
+                type="password"
+                autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="rounded-lg border border-muted/25 bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
+              />
+              {fieldErrors.password && <p className="font-ui text-xs text-accent-cold">{fieldErrors.password}</p>}
+              {mode === 'login' && (
+                <button
+                  type="button"
+                  onClick={() => switchMode('forgot')}
+                  className="w-fit font-ui text-xs text-muted underline hover:text-text"
+                >
+                  Forgot password?
+                </button>
+              )}
+            </div>
+          )}
 
           {formError && <p className="font-ui text-xs text-accent-cold">{formError}</p>}
           {infoMessage && (
@@ -152,8 +178,28 @@ export default function Auth() {
             disabled={submitting}
             className="mt-2 rounded-lg bg-accent-warm px-4 py-2.5 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
           >
-            {submitting ? (mode === 'signup' ? 'Signing up…' : 'Logging in…') : mode === 'signup' ? 'Sign up' : 'Log in'}
+            {mode === 'forgot'
+              ? submitting
+                ? 'Sending…'
+                : 'Send reset link'
+              : submitting
+                ? mode === 'signup'
+                  ? 'Signing up…'
+                  : 'Logging in…'
+                : mode === 'signup'
+                  ? 'Sign up'
+                  : 'Log in'}
           </button>
+
+          {mode === 'forgot' && (
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              className="font-ui text-xs text-muted underline hover:text-text"
+            >
+              Back to log in
+            </button>
+          )}
         </form>
       </div>
     </div>

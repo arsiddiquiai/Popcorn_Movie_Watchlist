@@ -5,6 +5,7 @@ import { ProtectedLayout } from './auth/ProtectedLayout'
 import CinemaBridge from './routes/CinemaBridge'
 import MovieDetail from './routes/MovieDetail'
 import PickForMe from './routes/PickForMe'
+import ResetPassword from './routes/ResetPassword'
 import Search from './routes/Search'
 import Settings from './routes/Settings'
 import TasteDNA from './routes/TasteDNA'
@@ -18,6 +19,12 @@ function App() {
         <BrowserRouter>
           <Routes>
             <Route path="/auth" element={<AuthGate />} />
+            {/* Deliberately outside both AuthGate and ProtectedLayout: the
+                recovery link establishes a real session, so AuthGate would
+                redirect it away to "/" before the user could set a new
+                password, and ProtectedLayout would require being logged in
+                a different way to even reach it. */}
+            <Route path="/reset-password" element={<ResetPassword />} />
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />
