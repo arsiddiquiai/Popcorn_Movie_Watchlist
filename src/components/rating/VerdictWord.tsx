@@ -12,7 +12,7 @@ export function VerdictWord({ verdict, color, reducedMotion }: VerdictWordProps)
   // transforms), but the spec wants the word to swap instantly.
   if (reducedMotion) {
     return (
-      <span className="block h-9 whitespace-nowrap font-display text-2xl leading-9" style={{ color }}>
+      <span className="block h-9 overflow-hidden whitespace-nowrap font-display text-2xl leading-9" style={{ color }}>
         {verdict}
       </span>
     )
@@ -24,7 +24,7 @@ export function VerdictWord({ verdict, color, reducedMotion }: VerdictWordProps)
     // reflowing past each other. nowrap matters here: the stage is only as
     // wide as its flex parent allows, and the two-word verdicts otherwise
     // wrap and spill out of it.
-    <span className="relative block h-9 w-full">
+    <span className="relative block h-9 w-full overflow-hidden">
       <AnimatePresence initial={false}>
         <motion.span
           key={verdict}

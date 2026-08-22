@@ -3,6 +3,7 @@ import { FilterBar, DEFAULT_ADVANCED_FILTERS, hasActiveAdvancedFilters, type Adv
 import { LanguageChips } from '../components/search/LanguageChips'
 import { MovieRow } from '../components/search/MovieRow'
 import { SearchResultCard } from '../components/search/SearchResultCard'
+import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
 import {
   discoverMovies,
   getNowPlayingMovies,
@@ -151,7 +152,7 @@ export default function Search() {
       <div className="mx-auto w-full max-w-6xl flex-1">
         {debouncedQuery ? (
           <>
-            {searchStatus === 'loading' && <p className="py-20 text-center font-ui text-sm text-muted">Searching…</p>}
+            {searchStatus === 'loading' && <PosterGridSkeleton />}
 
             {searchStatus === 'error' && (
               <div className="mx-auto max-w-md rounded-lg border border-accent-cold/40 bg-accent-cold/10 px-4 py-3 text-center font-ui text-sm text-accent-cold">
@@ -182,7 +183,7 @@ export default function Search() {
           <section className="flex flex-col gap-3">
             <h2 className="font-display text-lg text-text">Results</h2>
 
-            {discoverStatus === 'loading' && <p className="py-20 text-center font-ui text-sm text-muted">Loading…</p>}
+            {discoverStatus === 'loading' && <PosterGridSkeleton />}
 
             {discoverStatus === 'error' && (
               <div className="mx-auto max-w-md rounded-lg border border-accent-cold/40 bg-accent-cold/10 px-4 py-3 text-center font-ui text-sm text-accent-cold">

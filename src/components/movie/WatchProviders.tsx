@@ -42,7 +42,24 @@ export function WatchProviders({ tmdbId }: { tmdbId: number }) {
     }
   }, [tmdbId])
 
-  if (region === 'loading' || region === null) return null
+  // A genuine "no data for this region" (or a failed request — treated the
+  // same way deliberately, see the summary) hides the section entirely
+  // rather than showing an empty box. While we don't know which of those
+  // it'll be yet, a small skeleton avoids a blank flash right before it
+  // either fills in or disappears.
+  if (region === 'loading') {
+    return (
+      <div className="flex flex-col gap-2" aria-hidden="true">
+        <div className="h-4 w-28 animate-pulse rounded bg-surface" />
+        <div className="flex gap-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-10 w-10 animate-pulse rounded-lg bg-surface" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+  if (region === null) return null
 
   const hasAny = Boolean(region.flatrate?.length || region.rent?.length || region.buy?.length)
   if (!hasAny) return null

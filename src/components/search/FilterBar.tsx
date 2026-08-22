@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { getMovieGenres, type DiscoverSort, type TmdbGenre } from '../../lib/tmdbClient'
 import { useTheme } from '../../theme/ThemeProvider'
@@ -45,25 +45,48 @@ interface FilterBarProps {
   disabled: boolean
 }
 
+type GenreStatus = 'idle' | 'loading' | 'success' | 'error'
+
 export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
   const { reducedMotion } = useTheme()
   const [expanded, setExpanded] = useState(false)
   const [genres, setGenres] = useState<TmdbGenre[]>([])
+  const [genreStatus, setGenreStatus] = useState<GenreStatus>('idle')
+  const [retryToken, setRetryToken] = useState(0)
+  // Guards against double-fetching with a ref rather than genreStatus
+  // itself: genreStatus is state, so setting it inside this effect would
+  // change one of the effect's own dependencies, re-triggering the effect
+  // mid-flight and cancelling the request before it could ever resolve
+  // (harmless on a fast network, since the fetch usually wins the race —
+  // but on a slow or failing one, the cancellation always wins, leaving
+  // genreStatus stuck on 'loading' forever with nothing to show for it,
+  // success or error). A ref mutation doesn't trigger a re-render, so it
+  // can't create that race.
+  const hasStartedFetch = useRef(false)
 
   useEffect(() => {
-    if (!expanded || genres.length > 0) return
+    if (!expanded || hasStartedFetch.current) return
+    hasStartedFetch.current = true
     let cancelled = false
+    setGenreStatus('loading')
     getMovieGenres()
       .then((result) => {
-        if (!cancelled) setGenres(result)
+        if (cancelled) return
+        setGenres(result)
+        setGenreStatus('success')
       })
       .catch(() => {
-        /* genre chips just stay empty — not worth a dedicated error state here */
+        if (!cancelled) setGenreStatus('error')
       })
     return () => {
       cancelled = true
     }
-  }, [expanded, genres.length])
+  }, [expanded, retryToken])
+
+  function retryGenres() {
+    hasStartedFetch.current = false
+    setRetryToken((token) => token + 1)
+  }
 
   function toggleGenre(id: number) {
     onChange({
@@ -82,6 +105,24 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
 
       <div className="flex flex-col gap-2">
         <p className="font-ui text-xs text-muted">Genre</p>
+
+        {genreStatus === 'loading' && (
+          <div className="flex flex-wrap gap-2" aria-hidden="true">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="h-7 w-20 animate-pulse rounded-full bg-surface" />
+            ))}
+          </div>
+        )}
+
+        {genreStatus === 'error' && (
+          <p className="font-ui text-xs text-accent-cold">
+            Couldn't load genres.{' '}
+            <button type="button" onClick={retryGenres} className="underline">
+              Retry
+            </button>
+          </p>
+        )}
+
         <div className="flex flex-wrap gap-2">
           {genres.map((genre) => {
             const active = filters.genreIds.includes(genre.id)
@@ -131,7 +172,7 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
         </label>
 
         <label className="flex flex-col gap-1">
-          <span className="font-ui text-xs text-muted">Min rating</span>
+          <span className="font-ui text-xs text-muted">Min rating (0–10)</span>
           <input
             type="number"
             inputMode="decimal"

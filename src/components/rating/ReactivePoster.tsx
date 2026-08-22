@@ -48,7 +48,7 @@ export function ReactivePoster({ posterUrl, title, score, release, reducedMotion
   }, [release.token, release.effect, reducedMotion, posterControls, glowControls])
 
   return (
-    <div className="relative w-40 shrink-0 md:w-56">
+    <div className="relative mx-auto w-40 shrink-0 md:mx-0 md:w-56">
       <motion.div
         aria-hidden="true"
         animate={glowControls}

@@ -4,6 +4,7 @@ import { useAuth } from '../auth/AuthProvider'
 import { RatingPanel } from '../components/rating/RatingPanel'
 import { ReactivePoster, type PosterRelease } from '../components/rating/ReactivePoster'
 import { WatchProviders } from '../components/movie/WatchProviders'
+import { Spinner } from '../components/ui/Spinner'
 import type { Json, MovieCache, Rating, WatchlistItem } from '../lib/database.types'
 import { formatRuntime } from '../lib/format'
 import { getRating } from '../lib/ratings'
@@ -93,7 +94,11 @@ export default function MovieDetail() {
   }
 
   if (screenStatus === 'loading') {
-    return <CenteredMessage><p className="font-ui text-sm text-muted">Loading…</p></CenteredMessage>
+    return (
+      <CenteredMessage>
+        <Spinner />
+      </CenteredMessage>
+    )
   }
 
   if (screenStatus === 'not_found') {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
 import { WatchlistCard } from '../components/watchlist/WatchlistCard'
 import { getRandomPopularMovie } from '../lib/tmdbClient'
 import { fetchWatchlistByStatus, type WatchlistEntry } from '../lib/watchlist'
@@ -84,7 +85,7 @@ export default function Watchlist() {
       </header>
 
       <div className="mx-auto w-full max-w-6xl flex-1">
-        {status === 'loading' && <p className="py-20 text-center font-ui text-sm text-muted">Loading…</p>}
+        {status === 'loading' && <PosterGridSkeleton />}
 
         {status === 'error' && (
           <p className="py-20 text-center font-ui text-sm text-accent-cold">
