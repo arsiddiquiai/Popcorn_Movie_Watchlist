@@ -76,6 +76,71 @@
   --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
 }
 
+/*
+  Rating slider. A native range input for keyboard/AT support, with every
+  default control surface replaced. The three custom properties it reads
+  (--rating-color, --rating-color-soft, --rating-track) are set inline by
+  RatingPanel from the interpolated score colour.
+*/
+.rating-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.rating-slider:focus {
+  outline: none;
+}
+
+.rating-slider::-webkit-slider-runnable-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--rating-track);
+  transition: background var(--transition-fast) var(--ease-standard);
+}
+
+.rating-slider::-moz-range-track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--rating-track);
+  transition: background var(--transition-fast) var(--ease-standard);
+}
+
+.rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 26px;
+  width: 26px;
+  margin-top: -8px;
+  border-radius: 999px;
+  border: 3px solid var(--surface);
+  background: var(--rating-color);
+  transition:
+    background var(--transition-fast) var(--ease-standard),
+    box-shadow var(--transition-fast) var(--ease-standard);
+}
+
+.rating-slider::-moz-range-thumb {
+  height: 20px;
+  width: 20px;
+  border-radius: 999px;
+  border: 3px solid var(--surface);
+  background: var(--rating-color);
+  transition:
+    background var(--transition-fast) var(--ease-standard),
+    box-shadow var(--transition-fast) var(--ease-standard);
+}
+
+.rating-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow: 0 0 0 6px var(--rating-color-soft);
+}
+
+.rating-slider:focus-visible::-moz-range-thumb {
+  box-shadow: 0 0 0 6px var(--rating-color-soft);
+}
+
 html,
 body,
 #root {
