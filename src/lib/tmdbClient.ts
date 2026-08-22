@@ -49,7 +49,7 @@ async function tmdbFetch<T>(path: string, params: Record<string, string> = {}, s
 /** Absolute image URL for a TMDB poster/backdrop path, or null if there is none. */
 export function tmdbImageUrl(
   path: string | null,
-  size: 'w185' | 'w342' | 'w500' | 'w1280' | 'original' = 'w342',
+  size: 'w92' | 'w185' | 'w342' | 'w500' | 'w1280' | 'original' = 'w342',
 ): string | null {
   if (!path) return null
   return `${TMDB_IMAGE_BASE_URL}/${size}${path}`
@@ -76,6 +76,119 @@ export async function searchMovies(query: string, signal?: AbortSignal): Promise
   if (!trimmed) return []
   const data = await tmdbFetch<TmdbSearchResponse>('/search/movie', { query: trimmed, include_adult: 'false' }, signal)
   return data.results
+}
+
+export async function getTrendingMovies(signal?: AbortSignal): Promise<TmdbSearchMovie[]> {
+  const data = await tmdbFetch<TmdbSearchResponse>('/trending/movie/week', {}, signal)
+  return data.results
+}
+
+export async function getNowPlayingMovies(signal?: AbortSignal): Promise<TmdbSearchMovie[]> {
+  const data = await tmdbFetch<TmdbSearchResponse>('/movie/now_playing', {}, signal)
+  return data.results
+}
+
+export async function getPopularMoviesPage(page: number, signal?: AbortSignal): Promise<TmdbSearchMovie[]> {
+  const data = await tmdbFetch<TmdbSearchResponse>('/movie/popular', { page: String(page) }, signal)
+  return data.results
+}
+
+/**
+ * One random movie from TMDB's popular list, for "Surprise Me" — exactly
+ * one request: a random page number is picked first, then one random
+ * result from that page. Pages 1-20 keep the pool to genuinely popular
+ * titles rather than TMDB's long tail.
+ */
+export async function getRandomPopularMovie(signal?: AbortSignal): Promise<TmdbSearchMovie> {
+  const page = Math.floor(Math.random() * 20) + 1
+  const results = await getPopularMoviesPage(page, signal)
+  if (!results.length) throw new TmdbError('No movies available right now.', 'api')
+  return results[Math.floor(Math.random() * results.length)]
+}
+
+export interface TmdbGenre {
+  id: number
+  name: string
+}
+
+export async function getMovieGenres(signal?: AbortSignal): Promise<TmdbGenre[]> {
+  const data = await tmdbFetch<{ genres: TmdbGenre[] }>('/genre/movie/list', {}, signal)
+  return data.genres
+}
+
+export type DiscoverSort = 'popularity.desc' | 'vote_average.desc' | 'primary_release_date.desc'
+
+export interface DiscoverFilters {
+  /** ISO 639-1 code, or 'all'/undefined for no language restriction. */
+  language?: string
+  genreIds?: number[]
+  yearFrom?: number
+  yearTo?: number
+  minRating?: number
+  sortBy?: DiscoverSort
+}
+
+/** True if any filter would actually narrow or reorder results beyond TMDB's own defaults. */
+export function hasActiveDiscoverFilters(filters: DiscoverFilters): boolean {
+  return Boolean(
+    (filters.language && filters.language !== 'all') ||
+      filters.genreIds?.length ||
+      filters.yearFrom ||
+      filters.yearTo ||
+      filters.minRating ||
+      (filters.sortBy && filters.sortBy !== 'popularity.desc'),
+  )
+}
+
+export async function discoverMovies(filters: DiscoverFilters, signal?: AbortSignal): Promise<TmdbSearchMovie[]> {
+  const params: Record<string, string> = {
+    sort_by: filters.sortBy ?? 'popularity.desc',
+    include_adult: 'false',
+  }
+  if (filters.language && filters.language !== 'all') params.with_original_language = filters.language
+  if (filters.genreIds?.length) params.with_genres = filters.genreIds.join(',')
+  if (filters.yearFrom) params['primary_release_date.gte'] = `${filters.yearFrom}-01-01`
+  if (filters.yearTo) params['primary_release_date.lte'] = `${filters.yearTo}-12-31`
+  if (filters.minRating) params['vote_average.gte'] = String(filters.minRating)
+
+  // Without a vote-count floor, sorting by rating (or filtering by a
+  // minimum one) surfaces obscure titles with a handful of 10/10 votes
+  // ahead of widely-seen, well-reviewed films. 300 keeps the pool to
+  // movies enough people have actually rated for the average to mean
+  // anything. Applied whenever either control is in play, not just when
+  // minRating is set — an unfiltered rating-sort has the exact same
+  // problem.
+  if (filters.minRating || filters.sortBy === 'vote_average.desc') {
+    params['vote_count.gte'] = '300'
+  }
+  const data = await tmdbFetch<TmdbSearchResponse>('/discover/movie', params, signal)
+  return data.results
+}
+
+export interface TmdbWatchProvider {
+  provider_id: number
+  provider_name: string
+  logo_path: string
+}
+
+export interface TmdbWatchProvidersRegion {
+  link: string
+  flatrate?: TmdbWatchProvider[]
+  rent?: TmdbWatchProvider[]
+  buy?: TmdbWatchProvider[]
+}
+
+export async function getWatchProviders(
+  tmdbId: number,
+  region: string,
+  signal?: AbortSignal,
+): Promise<TmdbWatchProvidersRegion | null> {
+  const data = await tmdbFetch<{ results: Record<string, TmdbWatchProvidersRegion> }>(
+    `/movie/${tmdbId}/watch/providers`,
+    {},
+    signal,
+  )
+  return data.results[region] ?? null
 }
 
 export interface TmdbVideo {

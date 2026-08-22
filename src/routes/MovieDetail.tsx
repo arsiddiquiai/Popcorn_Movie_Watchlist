@@ -1,10 +1,16 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import type { Json, MovieCache, WatchlistItem } from '../lib/database.types'
+import { RatingPanel } from '../components/rating/RatingPanel'
+import { ReactivePoster, type PosterRelease } from '../components/rating/ReactivePoster'
+import { WatchProviders } from '../components/movie/WatchProviders'
+import type { Json, MovieCache, Rating, WatchlistItem } from '../lib/database.types'
 import { formatRuntime } from '../lib/format'
+import { getRating } from '../lib/ratings'
+import { releaseEffectFor } from '../lib/ratingScale'
 import { TmdbError, tmdbImageUrl } from '../lib/tmdbClient'
 import { addToWatchlist, getOrCacheMovie, getWatchlistItem, markAsWatched, removeFromWatchlist } from '../lib/watchlist'
+import { useTheme } from '../theme/ThemeProvider'
 
 interface StoredCastMember {
   name: string
@@ -28,9 +34,14 @@ export default function MovieDetail() {
   const tmdbId = Number(tmdbIdParam)
   const isValidId = Number.isFinite(tmdbId) && tmdbId > 0
 
+  const { reducedMotion } = useTheme()
   const [screenStatus, setScreenStatus] = useState<ScreenStatus>('loading')
   const [movie, setMovie] = useState<MovieCache | null>(null)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
+  const [rating, setRating] = useState<Rating | null>(null)
+  // Live slider value, lifted here so the poster below can react to it.
+  const [liveScore, setLiveScore] = useState<number | null>(null)
+  const [release, setRelease] = useState<PosterRelease>({ effect: null, token: 0 })
   const [retryKey, setRetryKey] = useState(0)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -45,11 +56,16 @@ export default function MovieDetail() {
     let cancelled = false
     setScreenStatus('loading')
 
-    Promise.all([getOrCacheMovie(tmdbId), getWatchlistItem(user.id, tmdbId)])
-      .then(([movieData, item]) => {
+    // The rating is fetched up front rather than after the status resolves,
+    // so the poster's first paint already reflects an existing score
+    // instead of visibly transitioning into it.
+    Promise.all([getOrCacheMovie(tmdbId), getWatchlistItem(user.id, tmdbId), getRating(user.id, tmdbId)])
+      .then(([movieData, item, ratingData]) => {
         if (cancelled) return
         setMovie(movieData)
         setWatchlistItem(item)
+        setRating(ratingData)
+        setLiveScore(item?.status === 'watched' ? (ratingData?.score ?? null) : null)
         setScreenStatus('ready')
       })
       .catch((err: unknown) => {
@@ -126,17 +142,13 @@ export default function MovieDetail() {
       )}
 
       <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-8 md:flex-row">
-        <div className="w-40 shrink-0 overflow-hidden rounded-lg bg-surface md:w-56">
-          <div className="aspect-[2/3]">
-            {posterUrl ? (
-              <img src={posterUrl} alt={movie.title} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center px-3 text-center font-ui text-xs text-muted">
-                {movie.title}
-              </div>
-            )}
-          </div>
-        </div>
+        <ReactivePoster
+          posterUrl={posterUrl}
+          title={movie.title}
+          score={liveScore}
+          release={release}
+          reducedMotion={reducedMotion}
+        />
 
         <div className="flex flex-1 flex-col gap-4">
           <div>
@@ -204,8 +216,16 @@ export default function MovieDetail() {
 
           {actionError && <p className="font-ui text-xs text-accent-cold">{actionError}</p>}
 
-          {watchlistItem?.status === 'watched' && (
-            <div>{/* Rating slider goes here — Prompt 6 */}</div>
+          {watchlistItem?.status === 'watched' && user && (
+            <RatingPanel
+              tmdbId={tmdbId}
+              userId={user.id}
+              existingRating={rating}
+              onScoreChange={setLiveScore}
+              onRelease={(score) =>
+                setRelease((prev) => ({ effect: releaseEffectFor(score), token: prev.token + 1 }))
+              }
+            />
           )}
 
           {movie.trailer_key && (
@@ -223,6 +243,10 @@ export default function MovieDetail() {
             </div>
           )}
 
+          {/* Watch providers sit directly below the trailer when there is
+              one — otherwise below cast instead, in the branch below. */}
+          {movie.trailer_key && <WatchProviders tmdbId={tmdbId} />}
+
           {topCast.length > 0 && (
             <div className="flex flex-col gap-2">
               <h2 className="font-ui text-sm font-semibold text-text">Cast</h2>
@@ -236,6 +260,8 @@ export default function MovieDetail() {
               </ul>
             </div>
           )}
+
+          {!movie.trailer_key && <WatchProviders tmdbId={tmdbId} />}
         </div>
       </div>
     </div>
