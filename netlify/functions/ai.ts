@@ -14,6 +14,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import WebSocket from 'ws'
 import type { Database } from '../../src/lib/database.types'
 
 // ---------------------------------------------------------------------------
@@ -798,6 +799,12 @@ export default async function handler(req: Request): Promise<Response> {
   const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false },
+    // supabase-js always constructs a RealtimeClient, even though this
+    // function never subscribes to anything. That constructor throws if it
+    // can't find a native WebSocket — true on Netlify's Node 20 functions
+    // runtime — so `ws` is supplied explicitly rather than depending on the
+    // platform's Node version.
+    realtime: { transport: WebSocket as unknown as typeof globalThis.WebSocket },
   })
 
   const { data: userData, error: userError } = await supabase.auth.getUser()
