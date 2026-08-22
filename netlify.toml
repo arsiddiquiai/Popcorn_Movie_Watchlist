@@ -5,6 +5,19 @@
 [build.environment]
   NODE_VERSION = "20"
 
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+# CLAUDE.md specifies the AI endpoint as `/ai`. This rewrite must stay ABOVE
+# the SPA catch-all below — redirects are evaluated in order, so without it
+# `/ai` would be swallowed by `/*` and served index.html.
+[[redirects]]
+  from = "/ai"
+  to = "/.netlify/functions/ai"
+  status = 200
+  force = true
+
 [[redirects]]
   from = "/*"
   to = "/index.html"
