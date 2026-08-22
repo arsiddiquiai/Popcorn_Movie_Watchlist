@@ -3,7 +3,10 @@
   publish = "dist"
 
 [build.environment]
-  NODE_VERSION = "20"
+  # 22, not 20: supabase-js's realtime client (initialized even though we
+  # never use realtime) requires a native WebSocket global to construct
+  # without crashing. Node 20 doesn't have one by default; Node 22 does.
+  NODE_VERSION = "22"
 
 [functions]
   directory = "netlify/functions"
