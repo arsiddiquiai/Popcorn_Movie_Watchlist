@@ -10,7 +10,7 @@ interface NavGroup {
   items: { to: string; label: string }[]
 }
 
-const groups: NavGroup[] = [
+export const groups: NavGroup[] = [
   {
     label: 'Discover',
     accent: 'accent-cold',
@@ -55,7 +55,28 @@ function isGroupActive(group: NavGroup, pathname: string) {
   return group.items.some((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
 }
 
-export function Nav() {
+/**
+ * Which territory a route belongs to — the single source of truth shared
+ * with AppShell's mode header/tint, so the nav grouping above and the
+ * content-area treatment can never drift apart. Routes that aren't listed
+ * in either group at all (Movie Detail, Taste DNA, Settings) are
+ * deliberately neutral — they're "Both" or "—" per CLAUDE.md's screens
+ * table, not Discover or Decide.
+ */
+export type AppMode = 'discover' | 'decide' | null
+
+export function getActiveMode(pathname: string): AppMode {
+  if (isGroupActive(groups[0], pathname)) return 'discover'
+  if (isGroupActive(groups[1], pathname)) return 'decide'
+  return null
+}
+
+interface NavProps {
+  /** Called after a link is clicked — lets the mobile drawer close itself. */
+  onNavigate?: () => void
+}
+
+export function Nav({ onNavigate }: NavProps = {}) {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
   const activeGroup = groups.find((group) => isGroupActive(group, pathname))
@@ -93,6 +114,7 @@ export function Nav() {
                     <NavLink
                       to={item.to}
                       end={item.to === '/'}
+                      onClick={onNavigate}
                       className={({ isActive }) =>
                         `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
                           isActive ? 'bg-bg font-semibold text-text' : 'text-muted hover:text-text'
@@ -114,6 +136,7 @@ export function Nav() {
           <li key={item.to}>
             <NavLink
               to={item.to}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
                   isActive ? 'text-text font-semibold' : 'text-muted hover:text-text'
