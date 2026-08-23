@@ -542,17 +542,46 @@ function buildCombinedResult(
   return { tier, tmdb_id: raw.tmdb_id, reason: raw.reason, alternates, cold_start: coldStart }
 }
 
-/** Cold start: fewer than 3 ratings, so there is no taste to reason over.
- *  Heuristics choose the film; Claude only writes the copy. */
-async function handleColdStart(candidates: MovieRow[], input: PickInput): Promise<PickResponse> {
-  const fits = (m: MovieRow) =>
-    m.runtime_minutes === null || m.runtime_minutes <= input.minutes_available + 20
+/** Runtime tolerance (minutes) tried in order — loosened one step at a time
+ *  rather than jumping straight to "anything goes". */
+const COLD_START_RUNTIME_TOLERANCES = [15, 30, 60]
 
+/** Cold start: fewer than 3 ratings, so there is no taste to reason over.
+ *  Heuristics choose the film; Claude only writes the copy.
+ *
+ *  The heuristic filters by time budget BEFORE picking, not after — picking
+ *  first and letting Claude's reason text notice the mismatch afterward
+ *  produced a real bug: a 173-minute film recommended against a 100-minute
+ *  budget, with the reason admitting it didn't fit while still presenting
+ *  it as the answer. Pick For Me must never recommend something it
+ *  simultaneously says doesn't fit. */
+async function handleColdStart(
+  candidates: MovieRow[],
+  catalogue: MovieRow[],
+  input: PickInput,
+): Promise<PickResponse | null> {
   const byRating = (a: MovieRow, b: MovieRow) => (b.tmdb_rating ?? 0) - (a.tmdb_rating ?? 0)
-  const fitting = candidates.filter(fits).sort(byRating)
-  // If nothing fits the time budget, fall back to the whole list rather than
-  // returning nothing — CLAUDE.md: "Never return nothing."
-  const ranked = fitting.length > 0 ? fitting : [...candidates].sort(byRating)
+  const fitsWithin = (m: MovieRow, tolerance: number) =>
+    m.runtime_minutes === null || m.runtime_minutes <= input.minutes_available + tolerance
+
+  let ranked: MovieRow[] = []
+  for (const tolerance of COLD_START_RUNTIME_TOLERANCES) {
+    ranked = candidates.filter((m) => fitsWithin(m, tolerance)).sort(byRating)
+    if (ranked.length > 0) break
+  }
+
+  if (ranked.length === 0) {
+    // Nothing on the watchlist fits even loosely — the catalogue pool is
+    // already filtered server-side to the time budget, so falling through
+    // to it beats recommending something the reason text would have to
+    // apologize for. `catalogue` is the same pre-fetched, genre-less
+    // Discover result `handlePick` runs in parallel with the Supabase load.
+    const fallback = await handleTier2(input, true, catalogue)
+    if (fallback) return fallback
+    // Catalogue empty too (rare) — an honest over-long pick beats nothing
+    // at all, per CLAUDE.md's "never return nothing".
+    ranked = [...candidates].sort(byRating)
+  }
 
   const [primary, ...rest] = ranked
   const alternates = rest.slice(0, 2)
@@ -726,7 +755,7 @@ async function handlePick(
     // catalogue. One call either way.
     result = await handleTier2(input, coldStart, catalogue)
   } else if (coldStart) {
-    result = await handleColdStart(candidates, input)
+    result = await handleColdStart(candidates, catalogue, input)
   } else {
     // One call, both pools — see handleCombinedPick's doc comment for why.
     result = await handleCombinedPick(input, candidates, ratingHistory, catalogue, coldStart)
