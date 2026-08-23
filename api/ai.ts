@@ -4,13 +4,11 @@
  * Per CLAUDE.md: "One [serverless function], `/ai`, routed by a `mode`
  * parameter. One deploy, one env var, one debugging surface." Originally a
  * Netlify Function at netlify/functions/ai.ts; ported here to Vercel's /api
- * convention with the same logic, same three modes, same env vars, same JWT
- * verification. netlify/functions/ai.ts is kept in place as a fallback until
- * the Vercel deploy is fully verified — see that file's own header.
+ * convention with the same logic, same env vars, same JWT verification.
+ * netlify/functions/ai.ts is kept in place as a fallback until the Vercel
+ * deploy is fully verified — see that file's own header.
  *
- * All three modes are implemented: `pick`, `bridge`, `taste`. There is no
- * `assistant` mode — "AI Movie Assistant" is CLAUDE.md's parked/Coming-Soon
- * feature, never built.
+ * All four modes are implemented: `pick`, `bridge`, `taste`, `assistant`.
  *
  * The Anthropic key is read from the server environment and never leaves it
  * (non-negotiable #4). The caller's identity comes from their verified Supabase
