@@ -188,7 +188,11 @@ const cacheRows = resolved.map(({ d }) => {
     credits: null,
   }
 })
-const { error: cacheErr } = await db.from('movies_cache').upsert(cacheRows)
+// ignoreDuplicates: movies_cache is write-once for clients (no UPDATE grant,
+// migration 20260824140000). Films already cached keep their existing row.
+const { error: cacheErr } = await db
+  .from('movies_cache')
+  .upsert(cacheRows, { onConflict: 'tmdb_id', ignoreDuplicates: true })
 if (cacheErr) { console.error('movies_cache upsert failed:', cacheErr.message); process.exit(1) }
 console.log(`  ${cacheRows.length} rows upserted`)
 

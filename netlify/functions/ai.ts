@@ -1905,7 +1905,10 @@ async function ensureMovieCached(supabase: SupabaseClient<Database>, tmdbId: num
   const trailers = (details.videos?.results ?? []).filter((v) => v.site === 'YouTube' && v.type === 'Trailer')
   const trailerKey = (trailers.find((v) => v.official) ?? trailers[0])?.key ?? null
 
-  const { data: inserted, error } = await supabase
+  // ignoreDuplicates -> ON CONFLICT DO NOTHING. movies_cache grants clients
+  // no UPDATE (migration 20260824140000), so a plain upsert would be refused
+  // on conflict. The select above already returned early for a cached row.
+  const { error } = await supabase
     .from('movies_cache')
     .upsert({
       tmdb_id: details.id,
@@ -1920,11 +1923,16 @@ async function ensureMovieCached(supabase: SupabaseClient<Database>, tmdbId: num
       original_language: details.original_language,
       trailer_key: trailerKey,
       credits: null,
-    })
-    .select()
-    .single()
+    }, { onConflict: 'tmdb_id', ignoreDuplicates: true })
   if (error) return null
-  return inserted
+
+  // DO NOTHING returns no row on conflict — read it back either way.
+  const { data: row } = await supabase
+    .from('movies_cache')
+    .select('*')
+    .eq('tmdb_id', tmdbId)
+    .maybeSingle()
+  return row
 }
 
 interface AssistantToolResult {

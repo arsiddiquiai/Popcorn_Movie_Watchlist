@@ -14,7 +14,12 @@ export async function getOrCacheMovie(tmdbId: number): Promise<MovieCache> {
 
   const details = await getMovieDetails(tmdbId)
 
-  const { data: inserted, error: upsertError } = await supabase
+  // ignoreDuplicates -> ON CONFLICT DO NOTHING, which needs only INSERT.
+  // movies_cache deliberately grants no UPDATE to clients (migration
+  // 20260824140000): any authenticated user could otherwise rewrite shared
+  // metadata for everyone. The select above already returned early if the row
+  // existed, so this only ever races another user adding the same film.
+  const { error: upsertError } = await supabase
     .from('movies_cache')
     .upsert({
       tmdb_id: details.id,
@@ -32,11 +37,18 @@ export async function getOrCacheMovie(tmdbId: number): Promise<MovieCache> {
       // it just isn't structurally assignable to the generic Json type
       // without this cast (named interfaces vs. an index signature).
       credits: (details.credits ?? null) as Json | null,
-    })
-    .select()
-    .single()
+    }, { onConflict: 'tmdb_id', ignoreDuplicates: true })
   if (upsertError) throw upsertError
-  return inserted
+
+  // DO NOTHING returns no row when it conflicts, so read the row back — it is
+  // either the one just inserted or the one the racing writer inserted.
+  const { data: row, error: reselectError } = await supabase
+    .from('movies_cache')
+    .select('*')
+    .eq('tmdb_id', tmdbId)
+    .single()
+  if (reselectError) throw reselectError
+  return row
 }
 
 export type AddToWatchlistResult = 'added' | 'already_on_list'
