@@ -4,6 +4,7 @@ import type { Rating } from '../../lib/database.types'
 import { saveReasonTags, saveScore } from '../../lib/ratings'
 import {
   interpolateScoreColor,
+  isFavoriteScore,
   releaseEffectFor,
   rgbString,
   rgbaString,
@@ -11,6 +12,7 @@ import {
 } from '../../lib/ratingScale'
 import { useTheme } from '../../theme/ThemeProvider'
 import { PulseLine } from './PulseLine'
+import { ReviewNote } from './ReviewNote'
 import { useRatingColors } from './useRatingColors'
 import { VerdictWord } from './VerdictWord'
 import { WhyChips } from './WhyChips'
@@ -132,7 +134,12 @@ export function RatingPanel({ tmdbId, userId, existingRating, onScoreChange, onR
         <div className="min-w-0 flex-1">
           <VerdictWord verdict={verdictFor(score)} color={colorCss} reducedMotion={reducedMotion} />
         </div>
-        <span className="shrink-0 font-display text-xl" style={{ color: colorCss }}>
+        <span className="flex shrink-0 items-center gap-1.5 font-display text-xl" style={{ color: colorCss }}>
+          {isFavoriteScore(score) && (
+            <span aria-label="Favorite" title="Favorite (9+)" className="text-base leading-none">
+              ★
+            </span>
+          )}
           {score}
           <span className="text-muted">/10</span>
         </span>
@@ -178,7 +185,10 @@ export function RatingPanel({ tmdbId, userId, existingRating, onScoreChange, onR
       )}
 
       {rating && !saveError && (
-        <WhyChips selected={tags} onToggle={(tag) => void toggleTag(tag)} disabled={saving} />
+        <>
+          <WhyChips selected={tags} onToggle={(tag) => void toggleTag(tag)} disabled={saving} />
+          <ReviewNote ratingId={rating.id} initialText={rating.review_text} />
+        </>
       )}
     </motion.div>
   )

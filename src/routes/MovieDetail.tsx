@@ -8,7 +8,8 @@ import { Spinner } from '../components/ui/Spinner'
 import type { Json, MovieCache, Rating, WatchlistItem } from '../lib/database.types'
 import { formatRuntime } from '../lib/format'
 import { getRating } from '../lib/ratings'
-import { releaseEffectFor } from '../lib/ratingScale'
+import { releaseEffectFor, verdictFor } from '../lib/ratingScale'
+import { shareRating } from '../lib/share'
 import { TmdbError, tmdbImageUrl } from '../lib/tmdbClient'
 import { addToWatchlist, getOrCacheMovie, getWatchlistItem, markAsWatched, removeFromWatchlist } from '../lib/watchlist'
 import { useTheme } from '../theme/ThemeProvider'
@@ -46,6 +47,7 @@ export default function MovieDetail() {
   const [retryKey, setRetryKey] = useState(0)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isValidId) {
@@ -78,6 +80,25 @@ export default function MovieDetail() {
       cancelled = true
     }
   }, [user, tmdbId, isValidId, retryKey])
+
+  async function handleShare() {
+    if (!movie || !rating) return
+    const outcome = await shareRating({
+      title: movie.title,
+      year: movie.release_year,
+      score: rating.score,
+      verdict: verdictFor(rating.score),
+    })
+    if (outcome === 'copied') {
+      setShareMessage('Copied!')
+      setTimeout(() => setShareMessage(null), 2500)
+    } else if (outcome === 'failed') {
+      setShareMessage("Couldn't share — try again")
+      setTimeout(() => setShareMessage(null), 2500)
+    }
+    // 'shared' and 'cancelled' need no message — the native share sheet (or
+    // the user backing out of it) is already its own feedback.
+  }
 
   async function runAction(action: () => Promise<void>) {
     if (actionPending || !user) return
@@ -231,6 +252,19 @@ export default function MovieDetail() {
                 setRelease((prev) => ({ effect: releaseEffectFor(score), token: prev.token + 1 }))
               }
             />
+          )}
+
+          {rating && (
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleShare()}
+                className="flex items-center gap-2 rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] hover:border-accent-warm/40"
+              >
+                Share rating
+              </button>
+              {shareMessage && <span className="font-ui text-xs text-muted">{shareMessage}</span>}
+            </div>
           )}
 
           {movie.trailer_key && (

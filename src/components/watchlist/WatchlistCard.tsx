@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
 import { formatRuntime } from '../../lib/format'
+import { isFavoriteScore } from '../../lib/ratingScale'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import type { WatchlistEntry } from '../../lib/watchlist'
 import { refreshAddedAt, removeFromWatchlist } from '../../lib/watchlist'
@@ -126,7 +127,12 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
           </div>
         )}
         {score !== null && (
-          <span className="absolute right-3 top-3 rounded-full bg-accent-warm px-2 py-0.5 font-mono text-[11px] font-medium text-bg">
+          <span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-accent-warm px-2 py-0.5 font-mono text-[11px] font-medium text-bg">
+            {isFavoriteScore(score) && (
+              <span aria-label="Favorite" title="Favorite (9+)" className="leading-none">
+                ★
+              </span>
+            )}
             {score}/10
           </span>
         )}

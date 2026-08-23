@@ -31,6 +31,13 @@ export function verdictFor(score: number): string {
   return VERDICTS[clamp(Math.round(score), 1, 10) - 1]
 }
 
+/** Favorites are DERIVED, never stored (CLAUDE.md's data model is explicit
+ *  about this — no favorites column/table). Anywhere a score is rendered,
+ *  this is the single source of truth for whether it reads as a favorite. */
+export function isFavoriteScore(score: number | null | undefined): boolean {
+  return typeof score === 'number' && score >= 9
+}
+
 /** Parses the value of a CSS custom property (hex or rgb()) into components. */
 export function parseCssColor(value: string): Rgb {
   const raw = value.trim()

@@ -35,3 +35,15 @@ export async function saveReasonTags(ratingId: string, tags: string[]): Promise<
   const { error } = await supabase.from('ratings').update({ reason_tags: tags }).eq('id', ratingId)
   if (error) throw error
 }
+
+/** Optional free-text note on a rating (Prompt 6's ratings.review_text
+ *  column, never wired up until now). Empty string is stored as null rather
+ *  than "", so an emptied-out note reads the same as one never written. */
+export async function saveReviewText(ratingId: string, text: string): Promise<void> {
+  const trimmed = text.trim()
+  const { error } = await supabase
+    .from('ratings')
+    .update({ review_text: trimmed || null })
+    .eq('id', ratingId)
+  if (error) throw error
+}
