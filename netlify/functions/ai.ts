@@ -44,14 +44,20 @@ const MODEL = 'claude-haiku-4-5-20251001'
 // crash the whole function with an opaque 500 before the handler's clean
 // "not configured" 503 could ever run.
 //
-// Netlify's free tier kills the function at 10s, hard and unconfigurable.
+// maxRetries is 0 deliberately. Under a tight function timeout a retry can
+// never help — it just spends the budget twice. Measured: a bridge call took
+// 18.5s as timeout-then-retry when the single successful attempt underneath
+// was ~6s.
 //
-// timeout must therefore sit UNDER that ceiling, and maxRetries must be 0: a
-// 12s timeout with one retry (the earlier setting) could not help — the
-// platform would kill us at 10s before the first attempt even timed out. It
-// actively hurt, too. A measured bridge call took 18.5s as timeout-then-
-// retry, when the single successful attempt underneath was ~6s. Failing fast
-// at 8s and surfacing our own 504 beats burning the whole budget twice.
+// The timeout is a safety valve, not a target. Warm calls measure 4.6-7.3s
+// live; only cold starts approach it. An earlier 8s setting was too tight
+// and turned recoverable cold-start calls into hard 504s (two live failures
+// at 10.3s and 11.4s that succeeded at 5.9-7.3s once warm).
+//
+// NOTE: those two failures were returned BY the function, meaning Netlify
+// let it run past 11.4s — so this site's real ceiling is above the 10s free
+// tier figure. 14s leaves cold starts room while still surfacing a runaway
+// call as our own clean 504.
 let anthropicClient: Anthropic | null = null
 function getAnthropic(): Anthropic {
   if (!anthropicClient) {
