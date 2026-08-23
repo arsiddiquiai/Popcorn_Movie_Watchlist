@@ -1,46 +1,49 @@
 /**
  * Popcorn's single AI endpoint.
  *
- * Per CLAUDE.md: "One Netlify Function, `/ai`, routed by a `mode` parameter.
- * One deploy, one env var, one debugging surface."
+ * Per CLAUDE.md: "One [serverless function], `/ai`, routed by a `mode`
+ * parameter. One deploy, one env var, one debugging surface." Originally a
+ * Netlify Function at netlify/functions/ai.ts; ported here to Vercel's /api
+ * convention with the same logic, same three modes, same env vars, same JWT
+ * verification. netlify/functions/ai.ts is kept in place as a fallback until
+ * the Vercel deploy is fully verified — see that file's own header.
  *
- * All three modes are implemented: `pick`, `bridge`, `taste`.
+ * All three modes are implemented: `pick`, `bridge`, `taste`. There is no
+ * `assistant` mode — "AI Movie Assistant" is CLAUDE.md's parked/Coming-Soon
+ * feature, never built.
  *
  * The Anthropic key is read from the server environment and never leaves it
  * (non-negotiable #4). The caller's identity comes from their verified Supabase
  * JWT — a `user_id` in the request body is never trusted.
- *
- * IMPORTANT — hosting migration in progress: api/ai.ts is a ported copy of
- * this file for Vercel's /api convention, kept as a fallback here until the
- * Vercel deploy is fully verified end to end. A bug fix or logic change
- * made in one without the other will silently drift the two apart — check
- * both files until this one is retired.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { Database } from '../../src/lib/database.types'
+import type { Database } from '../src/lib/database.types'
 
 // ---------------------------------------------------------------------------
 // Environment
 // ---------------------------------------------------------------------------
 
 // Supabase/TMDB values are read from the unprefixed names first, falling back
-// to the VITE_-prefixed ones the frontend already needs. Netlify exposes all
-// env vars to functions regardless of prefix, so the fallback means these
-// don't have to be entered twice in the dashboard. ANTHROPIC_API_KEY has no
-// VITE_ fallback on purpose — a VITE_-prefixed Anthropic key would be inlined
-// into the client bundle by Vite, which is exactly what must never happen.
+// to the VITE_-prefixed ones the frontend already needs. Both Netlify and
+// Vercel expose all env vars to functions regardless of prefix, so the
+// fallback means these don't have to be entered twice in the dashboard.
+// ANTHROPIC_API_KEY has no VITE_ fallback on purpose — a VITE_-prefixed
+// Anthropic key would be inlined into the client bundle by Vite, which is
+// exactly what must never happen.
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY
 const TMDB_API_KEY = process.env.TMDB_API_KEY ?? process.env.VITE_TMDB_API_KEY
 
-// Haiku, not Sonnet: Netlify's free-tier function timeout is a hard 10s
-// ceiling (not adjustable), and a single Sonnet Tier 2 call alone measured
-// 21s. Writing one specific, personal-taste-referencing sentence doesn't need
-// Sonnet-tier reasoning either — Haiku 4.5 trades reasoning headroom for the
-// latency this hard ceiling actually requires.
+// Haiku, not Sonnet: originally tuned against Netlify's free-tier 10s hard
+// ceiling (a single Sonnet Tier 2 call alone measured 21s), and writing one
+// specific, personal-taste-referencing sentence doesn't need Sonnet-tier
+// reasoning anyway. Vercel Hobby's ceiling is far more generous (300s
+// default and max) — this choice is left as-is for now rather than
+// retuned, since Haiku's speed and cost are still the right call
+// independent of which platform's timeout drove the original decision.
 const MODEL = 'claude-haiku-4-5-20251001'
 
 // Constructed lazily, not at module scope: the Anthropic constructor throws
@@ -56,15 +59,13 @@ const MODEL = 'claude-haiku-4-5-20251001'
 // The timeout is a safety valve, not a target: warm calls measure 4.6-7.3s
 // end-to-end, so it should only engage on a cold start or a stall.
 //
-// 8.5s keeps the whole request inside Netlify's 10s free-tier limit with
-// room for the TMDB gate and the ai_sessions insert that follow. Going
-// higher (14s was tried) risks the platform killing the function mid-flight
-// and returning an opaque 502, instead of this client timing out first and
-// surfacing our own clean 504 the UI can offer a retry on.
-//
-// Re-tune ONLY against a confirmed plan limit. Client-side wall clock is not
-// evidence of the ceiling: it includes network round-trip, so an 11.4s
-// reading from a remote machine is consistent with ~10s of execution.
+// 8.5s was tuned to keep the whole request inside Netlify's 10s free-tier
+// limit with room for the TMDB gate and the ai_sessions insert that follow.
+// On Vercel Hobby the real ceiling is 300s (confirmed against Vercel's
+// current docs, not assumed) — 30x more headroom — so this value is now far
+// more conservative than the platform requires. Left unchanged pending an
+// explicit decision on whether to loosen it; nothing about the Netlify-era
+// reasoning below is inaccurate, it's just no longer the binding constraint.
 let anthropicClient: Anthropic | null = null
 function getAnthropic(): Anthropic {
   if (!anthropicClient) {
@@ -1627,7 +1628,17 @@ async function handleTaste(
 // Router
 // ---------------------------------------------------------------------------
 
-export default async function handler(req: Request): Promise<Response> {
+// Vercel's documented "other frameworks" convention for a Node.js function
+// in /api: a named export per HTTP method, each taking the standard Request
+// and returning Response | Promise<Response> — no framework-specific request
+// object, no `context` param needed (this function does no background work
+// after responding, so @vercel/functions' waitUntil doesn't apply). The
+// internal method check just below is now redundant for a plain POST (only
+// a POST export exists, so GET/PUT/etc. never reach this file at all) but is
+// left in place as a harmless, already-tested safety net rather than
+// removed on the assumption that Vercel's own routing behaves a specific
+// way for unmatched methods.
+export async function POST(req: Request): Promise<Response> {
   if (req.method !== 'POST') return errorResponse('Method not allowed. Use POST.', 405)
 
   if (!ANTHROPIC_API_KEY) {
@@ -1665,8 +1676,11 @@ export default async function handler(req: Request): Promise<Response> {
     // supabase-js always constructs a RealtimeClient, even though this
     // function never subscribes to anything. That constructor throws if it
     // can't find a native WebSocket — true on Netlify's Node 20 functions
-    // runtime — so `ws` is supplied explicitly rather than depending on the
-    // platform's Node version.
+    // runtime, which is what originally forced this fix — so `ws` is
+    // supplied explicitly rather than depending on the host platform's Node
+    // version at all. Left in place on Vercel too: it's a portable
+    // safeguard, not a Netlify-specific workaround, and costs nothing if
+    // Vercel's runtime happens to have a native WebSocket already.
     realtime: { transport: WebSocket as unknown as typeof globalThis.WebSocket },
   })
 

@@ -1,0 +1,16 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+
+  "functions": {
+    "api/ai.ts": {
+      "maxDuration": 30
+    }
+  },
+
+  "rewrites": [
+    { "source": "/ai", "destination": "/api/ai" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
