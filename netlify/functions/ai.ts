@@ -76,6 +76,7 @@ interface Alternate {
 }
 
 interface PickResponse {
+  /** 1 = came from the user's own watchlist, 2 = from the wider catalogue. */
   tier: 1 | 2
   tmdb_id: number
   reason: string
@@ -743,21 +744,35 @@ async function handlePick(
 
   // Log every call (CLAUDE.md). A logging failure must not cost the user their
   // recommendation, so it's reported but not fatal.
-  const { error: logError } = await supabase.from('ai_sessions').insert({
-    user_id: userId,
-    mode: 'pick',
-    mood_text: input.mood_text,
-    energy_level: input.energy_level,
-    minutes_available: input.minutes_available,
-    company: input.company,
-    tier: result.tier,
-    recommended_tmdb_id: result.tmdb_id,
-    reason_text: result.reason,
-    accepted: false,
-  })
+  //
+  // `accepted` starts null, not false: null means "no decision yet", false is
+  // reserved for an explicit rejection by the user. Without that distinction
+  // every logged call would look rejected, and the accept-rate this column
+  // exists to measure would be meaningless.
+  //
+  // The inserted id comes back so the client can update `accepted` on the
+  // exact row this response came from. Selecting it here is the only
+  // race-free way — a client hunting for "my newest ai_sessions row" would
+  // pick the wrong one whenever two requests overlap.
+  const { data: session, error: logError } = await supabase
+    .from('ai_sessions')
+    .insert({
+      user_id: userId,
+      mode: 'pick',
+      mood_text: input.mood_text,
+      energy_level: input.energy_level,
+      minutes_available: input.minutes_available,
+      company: input.company,
+      tier: result.tier,
+      recommended_tmdb_id: result.tmdb_id,
+      reason_text: result.reason,
+      accepted: null,
+    })
+    .select('id')
+    .single()
   if (logError) console.error('ai_sessions insert failed:', logError.message)
 
-  return { status: 200, body: result }
+  return { status: 200, body: { ...result, session_id: session?.id ?? null } }
 }
 
 // ---------------------------------------------------------------------------
