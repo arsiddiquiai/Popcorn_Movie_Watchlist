@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
 import { WatchlistCard } from '../components/watchlist/WatchlistCard'
+import { decayLevelForAddedAt } from '../lib/decay'
 import { getRandomPopularMovie } from '../lib/tmdbClient'
 import { fetchWatchlistByStatus, type WatchlistEntry } from '../lib/watchlist'
 import { useTheme } from '../theme/ThemeProvider'
@@ -135,14 +136,28 @@ export default function Watchlist() {
             variants={{ visible: { transition: { staggerChildren: 0.045 } } }}
           >
             {entries.map((entry) => (
-              // decayLevel (visible ageing on "want" items) hooks in here in
-              // a later prompt — not built yet.
               <motion.div
                 key={entry.item.id}
                 variants={reducedMotion ? undefined : { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
-                <WatchlistCard entry={entry} />
+                <WatchlistCard
+                  entry={entry}
+                  // Decay only applies to "want" items — watched/dropped
+                  // never decay, per spec.
+                  decayLevel={tab === 'want' ? decayLevelForAddedAt(entry.item.added_at) : 0}
+                  onDecayResolved={(itemId, action, newAddedAt) => {
+                    setEntries((prev) =>
+                      action === 'removed'
+                        ? prev.filter((e) => e.item.id !== itemId)
+                        : prev.map((e) =>
+                            e.item.id === itemId && newAddedAt
+                              ? { ...e, item: { ...e.item, added_at: newAddedAt } }
+                              : e,
+                          ),
+                    )
+                  }}
+                />
               </motion.div>
             ))}
           </motion.div>

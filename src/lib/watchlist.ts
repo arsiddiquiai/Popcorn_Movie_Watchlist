@@ -108,6 +108,15 @@ export async function removeFromWatchlist(itemId: string): Promise<void> {
   if (error) throw error
 }
 
+/** "Keep it" on the decay rescue-or-bury prompt: resets added_at to now, so
+ *  the item reads as freshly added again and decayLevel returns to 0. */
+export async function refreshAddedAt(itemId: string): Promise<string> {
+  const nowIso = new Date().toISOString()
+  const { error } = await supabase.from('watchlist_items').update({ added_at: nowIso }).eq('id', itemId)
+  if (error) throw error
+  return nowIso
+}
+
 export interface WatchlistEntry {
   item: WatchlistItem
   movie: MovieCache
