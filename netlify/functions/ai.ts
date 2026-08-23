@@ -49,21 +49,24 @@ const MODEL = 'claude-haiku-4-5-20251001'
 // 18.5s as timeout-then-retry when the single successful attempt underneath
 // was ~6s.
 //
-// The timeout is a safety valve, not a target. Warm calls measure 4.6-7.3s
-// live; only cold starts approach it. An earlier 8s setting was too tight
-// and turned recoverable cold-start calls into hard 504s (two live failures
-// at 10.3s and 11.4s that succeeded at 5.9-7.3s once warm).
+// The timeout is a safety valve, not a target: warm calls measure 4.6-7.3s
+// end-to-end, so it should only engage on a cold start or a stall.
 //
-// NOTE: those two failures were returned BY the function, meaning Netlify
-// let it run past 11.4s — so this site's real ceiling is above the 10s free
-// tier figure. 14s leaves cold starts room while still surfacing a runaway
-// call as our own clean 504.
+// 8.5s keeps the whole request inside Netlify's 10s free-tier limit with
+// room for the TMDB gate and the ai_sessions insert that follow. Going
+// higher (14s was tried) risks the platform killing the function mid-flight
+// and returning an opaque 502, instead of this client timing out first and
+// surfacing our own clean 504 the UI can offer a retry on.
+//
+// Re-tune ONLY against a confirmed plan limit. Client-side wall clock is not
+// evidence of the ceiling: it includes network round-trip, so an 11.4s
+// reading from a remote machine is consistent with ~10s of execution.
 let anthropicClient: Anthropic | null = null
 function getAnthropic(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: ANTHROPIC_API_KEY,
-      timeout: 14_000, // milliseconds in the TS SDK
+      timeout: 8_500, // milliseconds in the TS SDK
       maxRetries: 0,
     })
   }
@@ -1298,21 +1301,24 @@ async function handleBridge(
     }
   }
 
-  // Logged with the same shape as mode:pick. The table has no column for a
-  // source film or target industry, so `mood_text` carries the target (it is
-  // this mode's free-text user intent) and the top match populates
-  // recommended_tmdb_id/reason_text. energy_level, minutes_available,
-  // company and tier genuinely do not apply here and stay null.
+  // Logged with the same shape as mode:pick. source_tmdb_id and target have
+  // their own columns (migration 20260823120000), so the source/target pair
+  // that produced this recommendation is recoverable for later analysis
+  // rather than being squeezed into mood_text. mood_text, energy_level,
+  // minutes_available, company and tier genuinely do not apply to a bridge
+  // and stay null.
   const { data: session, error: logError } = await supabase
     .from('ai_sessions')
     .insert({
       user_id: userId,
       mode: 'bridge',
-      mood_text: input.target,
+      mood_text: null,
       energy_level: null,
       minutes_available: null,
       company: null,
       tier: null,
+      source_tmdb_id: input.source_tmdb_id,
+      target: input.target,
       recommended_tmdb_id: matches[0].tmdb_id,
       reason_text: matches[0].reason,
       accepted: null,

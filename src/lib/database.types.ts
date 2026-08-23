@@ -153,6 +153,10 @@ export interface Database {
           recommended_tmdb_id: number | null
           reason_text: string | null
           accepted: boolean | null
+          /** mode=bridge only: the film an equivalent was asked for. */
+          source_tmdb_id: number | null
+          /** mode=bridge only: requested industry/language, as typed. */
+          target: string | null
           created_at: string
         }
         Insert: {
@@ -167,6 +171,8 @@ export interface Database {
           recommended_tmdb_id?: number | null
           reason_text?: string | null
           accepted?: boolean | null
+          source_tmdb_id?: number | null
+          target?: string | null
           created_at?: string
         }
         Update: {
@@ -181,6 +187,8 @@ export interface Database {
           recommended_tmdb_id?: number | null
           reason_text?: string | null
           accepted?: boolean | null
+          source_tmdb_id?: number | null
+          target?: string | null
           created_at?: string
         }
         Relationships: []
