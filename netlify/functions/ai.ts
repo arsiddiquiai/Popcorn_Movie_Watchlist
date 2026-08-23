@@ -4,7 +4,7 @@
  * Per CLAUDE.md: "One Netlify Function, `/ai`, routed by a `mode` parameter.
  * One deploy, one env var, one debugging surface."
  *
- * All three modes are implemented: `pick`, `bridge`, `taste`.
+ * All four modes are implemented: `pick`, `bridge`, `taste`, `assistant`.
  *
  * The Anthropic key is read from the server environment and never leaves it
  * (non-negotiable #4). The caller's identity comes from their verified Supabase
@@ -15,6 +15,14 @@
  * Vercel deploy is fully verified end to end. A bug fix or logic change
  * made in one without the other will silently drift the two apart — check
  * both files until this one is retired.
+ *
+ * NOTE on `assistant` specifically: this file's Anthropic client timeout is
+ * deliberately still 8.5s (see getAnthropic() below), NOT the 25s used in
+ * api/ai.ts — that 25s value only fits Vercel's 30s budget. A multi-tool-
+ * call assistant turn has measured 7.5s end-to-end even on Vercel's larger
+ * budget, so on this file's hard Netlify 10s ceiling such a turn is at real
+ * risk of failing. This mode is ported here for fallback parity, not
+ * because it's been verified to fit Netlify's limit.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
@@ -1624,6 +1632,483 @@ async function handleTaste(
 }
 
 // ---------------------------------------------------------------------------
+// mode: "assistant" — AI Movie Assistant
+// ---------------------------------------------------------------------------
+
+interface AssistantMessage {
+  role: 'user' | 'assistant'
+  content: string
+}
+
+interface AssistantInput {
+  message: string
+  /** Client-held recent turns — this mode has no server-side chat storage.
+   *  "No persistent chat history across sessions" per spec: the client
+   *  simply doesn't send any once the tab/session ends. */
+  history: AssistantMessage[]
+}
+
+interface AssistantResponse {
+  reply: string
+  /** The film added to the watchlist this turn, if the user asked for one
+   *  and Claude called the add-to-watchlist tool. Lets the UI show a
+   *  confirmation without re-parsing the reply text for it. */
+  added_tmdb_id: number | null
+  tool_calls_used: number
+  session_id: string | null
+}
+
+const ASSISTANT_MESSAGE_MAX_CHARS = 1000
+/** Bounds prompt size regardless of how much history the client sends —
+ *  same reasoning as MAX_RATING_HISTORY/MAX_CANDIDATES elsewhere in this
+ *  file: trim server-side, never trust the caller's payload size. */
+const ASSISTANT_MAX_HISTORY_MESSAGES = 10
+
+function validateAssistantInput(raw: unknown): { input: AssistantInput } | { problems: string[] } {
+  const problems: string[] = []
+  const body = (raw ?? {}) as Record<string, unknown>
+
+  const message = typeof body.message === 'string' ? body.message.trim() : ''
+  if (!message) {
+    problems.push('message is required and must be a non-empty string.')
+  } else if (message.length > ASSISTANT_MESSAGE_MAX_CHARS) {
+    problems.push(`message must be ${ASSISTANT_MESSAGE_MAX_CHARS} characters or fewer.`)
+  }
+
+  let history: AssistantMessage[] = []
+  if (body.history !== undefined) {
+    if (!Array.isArray(body.history)) {
+      problems.push('history must be an array if provided.')
+    } else {
+      const valid = body.history.every(
+        (turn): turn is AssistantMessage =>
+          typeof turn === 'object' &&
+          turn !== null &&
+          (turn as AssistantMessage).role !== undefined &&
+          ['user', 'assistant'].includes((turn as AssistantMessage).role) &&
+          typeof (turn as AssistantMessage).content === 'string',
+      )
+      if (!valid) {
+        problems.push('Each history entry must have role "user"|"assistant" and string content.')
+      } else {
+        history = (body.history as AssistantMessage[]).slice(-ASSISTANT_MAX_HISTORY_MESSAGES)
+      }
+    }
+  }
+
+  if (problems.length > 0) return { problems }
+  return { input: { message, history } }
+}
+
+/** Guardrail, not a tight constraint (per spec): capped rather than left
+ *  open-ended regardless of platform. NOTE — on THIS file (Netlify), the
+ *  cap interacts badly with the hard 10s free-tier ceiling: a multi-tool-
+ *  call turn measured 7.5s end-to-end on Vercel's much larger 30s budget,
+ *  which leaves very little room here once TMDB lookups, the usage-cap
+ *  count, and the ai_sessions insert are added. This mode is kept for
+ *  fallback parity, but expect assistant turns that need more than one
+ *  tool call to be at real risk of hitting Netlify's 10s ceiling. */
+const ASSISTANT_MAX_TOOL_CALLS = 3
+const ASSISTANT_DAILY_MESSAGE_CAP = 30
+
+const searchMoviesByTitleTool = {
+  name: 'search_movies_by_title',
+  description: 'Search TMDB for a specific film by title. Use when the user names a movie.',
+  strict: true,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      query: { type: 'string', description: 'The title to search for.' },
+    },
+    required: ['query'],
+    additionalProperties: false,
+  },
+}
+
+const discoverMoviesTool = {
+  name: 'discover_movies_by_criteria',
+  description:
+    "Browse TMDB's catalogue by genre and minimum rating — for requests like \"something like Parasite but " +
+    'lighter\" or "a good comedy from the 90s\" where no specific title is named.',
+  strict: true,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      genres: {
+        type: 'array',
+        description: 'One to three genre names (e.g. "Thriller", "Comedy") matching the mood being discussed.',
+        items: { type: 'string' },
+      },
+      min_rating: {
+        type: 'number',
+        description: 'Minimum TMDB rating (0-10), if quality/acclaim matters to the request. Omit if not relevant.',
+      },
+    },
+    required: ['genres'],
+    additionalProperties: false,
+  },
+}
+
+const addToWatchlistTool = {
+  name: 'add_to_watchlist',
+  description:
+    'Adds a film to the user\'s watchlist. Only call this when the user has explicitly asked to add or save a ' +
+    'specific film discussed in this conversation — never on your own initiative.',
+  strict: true,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      tmdb_id: {
+        type: 'integer',
+        description: 'The tmdb_id of the film to add. Must come from a search_movies_by_title or ' +
+          'discover_movies_by_criteria result earlier in this conversation — never invented.',
+      },
+    },
+    required: ['tmdb_id'],
+    additionalProperties: false,
+  },
+}
+
+const ASSISTANT_TOOLS: Anthropic.Messages.ToolUnion[] = [searchMoviesByTitleTool, discoverMoviesTool, addToWatchlistTool]
+
+const ASSISTANT_SYSTEM_PROMPT = [
+  "You are Popcorn's AI Movie Assistant — a conversational partner for figuring out what to watch through",
+  'back-and-forth, not a single-shot recommender.',
+  '',
+  'Rules:',
+  '- Only ever discuss or recommend films that came from a search_movies_by_title or',
+  '  discover_movies_by_criteria tool result. Never invent a title or tmdb_id from memory — if you have not',
+  '  looked a film up in this conversation, look it up before naming it.',
+  '- Call add_to_watchlist only when the user explicitly asks to add/save a specific film. Never assume.',
+  '- If the user describes a mood, energy level, time available, and who they are watching with — the exact',
+  '  shape of a "what should I watch right now" request — do not try to solve it yourself. Say plainly that',
+  '  Pick For Me is built exactly for that and point them to it, rather than reasoning through their whole',
+  '  watchlist here. You do not have access to their ratings or watchlist at all — Pick For Me does.',
+  '- If asked for a cross-industry or cross-language equivalent of a film (e.g. "the Korean version of X"),',
+  '  point to Cinema Bridge instead of guessing — that feature validates every match against TMDB before',
+  '  showing it, which this conversation has no way to do reliably.',
+  '- Keep replies short and conversational — a couple of sentences, not an essay.',
+  '- Never fabricate plot details, cast, or facts about a film beyond what its tool result told you.',
+].join('\n')
+
+/** Shape shared by TMDB's /search/movie and /discover/movie result items —
+ *  enough fields to describe a movie to Claude, not a full movies_cache row
+ *  (that only gets built once something is actually added, in
+ *  ensureMovieCached). */
+interface TmdbRawMovie {
+  id: number
+  title: string
+  poster_path: string | null
+  release_date?: string
+  genre_ids?: number[]
+  vote_average?: number
+  original_language?: string
+}
+
+function mapTmdbRawToMovieRow(r: TmdbRawMovie): MovieRow {
+  return {
+    tmdb_id: r.id,
+    title: r.title,
+    poster_path: r.poster_path,
+    backdrop_path: null,
+    release_year: r.release_date ? Number(r.release_date.slice(0, 4)) : null,
+    runtime_minutes: null,
+    genres: (r.genre_ids ?? []).map((id) => TMDB_GENRES[id]).filter(Boolean),
+    overview: null,
+    tmdb_rating: r.vote_average ?? null,
+    original_language: r.original_language ?? null,
+    trailer_key: null,
+    credits: null,
+    cached_at: null,
+  }
+}
+
+async function searchMoviesByTitle(query: string): Promise<{ results: MovieRow[] } | { error: string }> {
+  if (!TMDB_API_KEY) return { error: 'TMDB is not configured.' }
+  const url = new URL('https://api.themoviedb.org/3/search/movie')
+  url.searchParams.set('api_key', TMDB_API_KEY)
+  url.searchParams.set('query', query)
+  url.searchParams.set('include_adult', 'false')
+
+  const body = await tmdbGetJson<{ results?: TmdbRawMovie[] }>(url.toString())
+  return { results: (body?.results ?? []).slice(0, 5).map(mapTmdbRawToMovieRow) }
+}
+
+async function discoverMoviesByCriteria(
+  genres: string[],
+  minRating: number | undefined,
+): Promise<{ results: MovieRow[] } | { error: string }> {
+  if (!TMDB_API_KEY) return { error: 'TMDB is not configured.' }
+  const genreIds = genres.map((name) => TMDB_GENRE_IDS[name.toLowerCase()]).filter((id): id is number => Number.isFinite(id))
+
+  const url = new URL('https://api.themoviedb.org/3/discover/movie')
+  url.searchParams.set('api_key', TMDB_API_KEY)
+  url.searchParams.set('include_adult', 'false')
+  url.searchParams.set('sort_by', 'popularity.desc')
+  url.searchParams.set('vote_count.gte', '300')
+  if (genreIds.length > 0) url.searchParams.set('with_genres', genreIds.join(','))
+  if (minRating) url.searchParams.set('vote_average.gte', String(minRating))
+
+  const body = await tmdbGetJson<{ results?: TmdbRawMovie[] }>(url.toString())
+  return { results: (body?.results ?? []).slice(0, 5).map(mapTmdbRawToMovieRow) }
+}
+
+/** Server-side equivalent of src/lib/watchlist.ts's getOrCacheMovie (that
+ *  file is client-only — it reads import.meta.env, which throws outside
+ *  Vite, so it can't be imported here). Same shape of result: upserts full
+ *  movie details into movies_cache so an assistant-added item looks
+ *  identical to one added via Search, not a bare title. */
+async function ensureMovieCached(supabase: SupabaseClient<Database>, tmdbId: number): Promise<MovieRow | null> {
+  const { data: existing } = await supabase.from('movies_cache').select('*').eq('tmdb_id', tmdbId).maybeSingle()
+  if (existing) return existing
+
+  if (!TMDB_API_KEY) return null
+  const url = new URL(`https://api.themoviedb.org/3/movie/${tmdbId}`)
+  url.searchParams.set('api_key', TMDB_API_KEY)
+  url.searchParams.set('append_to_response', 'videos')
+
+  const details = await tmdbGetJson<{
+    id: number
+    title: string
+    poster_path: string | null
+    backdrop_path: string | null
+    release_date: string
+    runtime: number | null
+    genres: { name: string }[]
+    overview: string
+    vote_average: number
+    original_language: string
+    videos?: { results: { key: string; site: string; type: string; official?: boolean }[] }
+  }>(url.toString())
+  if (!details) return null
+
+  const trailers = (details.videos?.results ?? []).filter((v) => v.site === 'YouTube' && v.type === 'Trailer')
+  const trailerKey = (trailers.find((v) => v.official) ?? trailers[0])?.key ?? null
+
+  const { data: inserted, error } = await supabase
+    .from('movies_cache')
+    .upsert({
+      tmdb_id: details.id,
+      title: details.title,
+      poster_path: details.poster_path,
+      backdrop_path: details.backdrop_path,
+      release_year: details.release_date ? Number(details.release_date.slice(0, 4)) : null,
+      runtime_minutes: details.runtime,
+      genres: details.genres?.map((g) => g.name) ?? [],
+      overview: details.overview,
+      tmdb_rating: details.vote_average,
+      original_language: details.original_language,
+      trailer_key: trailerKey,
+      credits: null,
+    })
+    .select()
+    .single()
+  if (error) return null
+  return inserted
+}
+
+interface AssistantToolResult {
+  toolUseId: string
+  content: string
+  /** Set only by a successful add_to_watchlist call, so the caller can
+   *  surface it without re-parsing tool results. */
+  addedTmdbId?: number
+}
+
+async function executeAssistantTool(
+  toolUse: Anthropic.ToolUseBlock,
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<AssistantToolResult> {
+  if (toolUse.name === 'search_movies_by_title') {
+    const { query } = toolUse.input as { query: string }
+    const result = await searchMoviesByTitle(query)
+    return { toolUseId: toolUse.id, content: JSON.stringify(result) }
+  }
+
+  if (toolUse.name === 'discover_movies_by_criteria') {
+    const { genres, min_rating } = toolUse.input as { genres: string[]; min_rating?: number }
+    const result = await discoverMoviesByCriteria(genres ?? [], min_rating)
+    return { toolUseId: toolUse.id, content: JSON.stringify(result) }
+  }
+
+  if (toolUse.name === 'add_to_watchlist') {
+    const { tmdb_id } = toolUse.input as { tmdb_id: number }
+    try {
+      const movie = await ensureMovieCached(supabase, tmdb_id)
+      if (!movie) {
+        return { toolUseId: toolUse.id, content: JSON.stringify({ error: 'Could not find that film on TMDB.' }) }
+      }
+      const { data: existing } = await supabase
+        .from('watchlist_items')
+        .select('id, status')
+        .eq('user_id', userId)
+        .eq('tmdb_id', tmdb_id)
+        .maybeSingle()
+
+      if (existing && existing.status !== 'dropped') {
+        return {
+          toolUseId: toolUse.id,
+          content: JSON.stringify({ status: 'already_on_list', title: movie.title }),
+        }
+      }
+      if (existing) {
+        await supabase.from('watchlist_items').update({ status: 'want', watched_at: null }).eq('id', existing.id)
+      } else {
+        await supabase.from('watchlist_items').insert({ user_id: userId, tmdb_id, status: 'want' })
+      }
+      return {
+        toolUseId: toolUse.id,
+        content: JSON.stringify({ status: 'added', title: movie.title }),
+        addedTmdbId: tmdb_id,
+      }
+    } catch (err) {
+      return {
+        toolUseId: toolUse.id,
+        content: JSON.stringify({ error: err instanceof Error ? err.message : 'Failed to add to watchlist.' }),
+      }
+    }
+  }
+
+  return { toolUseId: toolUse.id, content: JSON.stringify({ error: `Unknown tool: ${toolUse.name}` }) }
+}
+
+/** Multi-turn tool-use loop, capped at ASSISTANT_MAX_TOOL_CALLS total
+ *  invocations across the whole turn. Unlike callClaudeForTool (which
+ *  forces exactly one tool call), this uses tool_choice: "auto" — a text
+ *  reply with no tool call at all is the common case for a chat turn. */
+async function runAssistantConversation(
+  input: AssistantInput,
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ reply: string; addedTmdbId: number | null; toolCallsUsed: number }> {
+  const messages: Anthropic.MessageParam[] = [
+    ...input.history.map((turn) => ({ role: turn.role, content: turn.content })),
+    { role: 'user' as const, content: input.message },
+  ]
+
+  let toolCallsUsed = 0
+  let addedTmdbId: number | null = null
+
+  for (let round = 0; round <= ASSISTANT_MAX_TOOL_CALLS; round += 1) {
+    const atCap = toolCallsUsed >= ASSISTANT_MAX_TOOL_CALLS
+    const response = await getAnthropic().messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: ASSISTANT_SYSTEM_PROMPT,
+      // Once the cap is hit, force a text-only wrap-up instead of abruptly
+      // cutting the conversation off mid-tool-call.
+      tools: atCap ? undefined : ASSISTANT_TOOLS,
+      tool_choice: atCap ? undefined : { type: 'auto' },
+      messages,
+    })
+
+    if (response.stop_reason === 'refusal') {
+      throw new Error(`Claude declined the request (${response.stop_details?.category ?? 'unspecified'}).`)
+    }
+
+    const toolUseBlocks = response.content.filter(
+      (block): block is Anthropic.ToolUseBlock => block.type === 'tool_use',
+    )
+    const textBlocks = response.content.filter(
+      (block): block is Anthropic.TextBlock => block.type === 'text',
+    )
+
+    if (toolUseBlocks.length === 0 || atCap) {
+      const reply = textBlocks.map((b) => b.text).join('\n').trim()
+      return { reply: reply || "I'm not sure how to answer that — try rephrasing?", addedTmdbId, toolCallsUsed }
+    }
+
+    messages.push({ role: 'assistant', content: response.content })
+
+    const results = await Promise.all(
+      toolUseBlocks.map((toolUse) => executeAssistantTool(toolUse, supabase, userId)),
+    )
+    toolCallsUsed += toolUseBlocks.length
+    for (const result of results) {
+      if (result.addedTmdbId) addedTmdbId = result.addedTmdbId
+    }
+
+    messages.push({
+      role: 'user',
+      content: results.map((r) => ({
+        type: 'tool_result' as const,
+        tool_use_id: r.toolUseId,
+        content: r.content,
+      })),
+    })
+  }
+
+  // Unreachable in practice (the atCap branch above always returns), but
+  // keeps the function's return type honest without a non-null assertion.
+  return { reply: "I'm not sure how to answer that — try rephrasing?", addedTmdbId, toolCallsUsed }
+}
+
+async function handleAssistant(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+  input: AssistantInput,
+): Promise<{ status: number; body: unknown }> {
+  // Cap checked BEFORE calling Claude, per spec — a capped-out user must
+  // never trigger (and pay for) a wasted call. UTC calendar day boundary,
+  // documented in CLAUDE.md, so "resets tomorrow" is unambiguous.
+  const startOfTodayUtc = new Date().toISOString().slice(0, 10) + 'T00:00:00.000Z'
+  const { count, error: countError } = await supabase
+    .from('ai_sessions')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', userId)
+    .eq('mode', 'assistant')
+    .gte('created_at', startOfTodayUtc)
+  if (countError) throw countError
+
+  if ((count ?? 0) >= ASSISTANT_DAILY_MESSAGE_CAP) {
+    return {
+      status: 200,
+      body: {
+        error: `You've reached today's limit of ${ASSISTANT_DAILY_MESSAGE_CAP} assistant messages. It resets tomorrow.`,
+        code: 'usage_cap_reached',
+      },
+    }
+  }
+
+  const { reply, addedTmdbId, toolCallsUsed } = await runAssistantConversation(input, supabase, userId)
+
+  // Logged with the same shape as the other modes. mood_text carries the
+  // user's message (their free-text input, same role it plays for pick),
+  // reason_text carries the assistant's reply, recommended_tmdb_id is set
+  // only when a film was actually added this turn. tier/energy_level/
+  // minutes_available/company/source_tmdb_id/target genuinely do not apply
+  // and stay null.
+  const { data: session, error: logError } = await supabase
+    .from('ai_sessions')
+    .insert({
+      user_id: userId,
+      mode: 'assistant',
+      mood_text: input.message,
+      energy_level: null,
+      minutes_available: null,
+      company: null,
+      tier: null,
+      source_tmdb_id: null,
+      target: null,
+      recommended_tmdb_id: addedTmdbId,
+      reason_text: reply,
+      accepted: addedTmdbId !== null ? true : null,
+    })
+    .select('id')
+    .single()
+  if (logError) console.error('ai_sessions insert failed:', logError.message)
+
+  const response: AssistantResponse = {
+    reply,
+    added_tmdb_id: addedTmdbId,
+    tool_calls_used: toolCallsUsed,
+    session_id: session?.id ?? null,
+  }
+  return { status: 200, body: response }
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -1647,8 +2132,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const mode = (body as { mode?: unknown })?.mode
-  if (mode !== 'pick' && mode !== 'bridge' && mode !== 'taste') {
-    return errorResponse('mode must be one of: "pick", "bridge", "taste".', 400, 'invalid_mode')
+  if (mode !== 'pick' && mode !== 'bridge' && mode !== 'taste' && mode !== 'assistant') {
+    return errorResponse('mode must be one of: "pick", "bridge", "taste", "assistant".', 400, 'invalid_mode')
   }
 
   // Identity comes from the verified JWT only — never from the request body.
@@ -1681,6 +2166,15 @@ export default async function handler(req: Request): Promise<Response> {
     // the caller's own rating history, nothing the client supplies.
     if (mode === 'taste') {
       const { status, body: responseBody } = await handleTaste(supabase, userId)
+      return json(responseBody, status)
+    }
+
+    if (mode === 'assistant') {
+      const validated = validateAssistantInput(body)
+      if ('problems' in validated) {
+        return json({ error: 'Invalid request body.', code: 'invalid_input', problems: validated.problems }, 400)
+      }
+      const { status, body: responseBody } = await handleAssistant(supabase, userId, validated.input)
       return json(responseBody, status)
     }
 
