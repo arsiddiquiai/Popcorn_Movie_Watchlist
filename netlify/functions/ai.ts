@@ -4,9 +4,7 @@
  * Per CLAUDE.md: "One Netlify Function, `/ai`, routed by a `mode` parameter.
  * One deploy, one env var, one debugging surface."
  *
- * `mode: "pick"` and `mode: "bridge"` are implemented. `taste` is declared in
- * the router below and returns 501 until its handler lands, so the routing
- * shape is already the one it'll slot into.
+ * All three modes are implemented: `pick`, `bridge`, `taste`.
  *
  * The Anthropic key is read from the server environment and never leaves it
  * (non-negotiable #4). The caller's identity comes from their verified Supabase
@@ -1337,6 +1335,289 @@ async function handleBridge(
 }
 
 // ---------------------------------------------------------------------------
+// mode: "taste" — Taste DNA
+// ---------------------------------------------------------------------------
+
+interface TasteMovieRow {
+  tmdb_id: number
+  release_year: number | null
+  runtime_minutes: number | null
+  genres: string[] | null
+}
+
+interface GenreCount {
+  genre: string
+  count: number
+}
+
+interface DecadeCount {
+  decade: string
+  count: number
+}
+
+interface BlindSpot {
+  genre: string
+  tmdb_id: number
+  title: string
+  reason: string
+}
+
+interface TasteResponse {
+  cold_start: boolean
+  total_rated: number
+  personality_label: string | null
+  personality_description: string | null
+  genre_breakdown: GenreCount[]
+  decade_breakdown: DecadeCount[]
+  avg_runtime_minutes: number | null
+  blind_spots: BlindSpot[]
+  session_id: string | null
+}
+
+/** Minimum ratings before a personality label is claimed. Below this,
+ *  CLAUDE.md's cold-start honesty rule applies here too: say plainly there
+ *  isn't enough data yet rather than inventing a label from noise. */
+const TASTE_MIN_RATINGS = 5
+
+const BLIND_SPOT_COUNT = 3
+
+/** Rated + watchlisted movies with the genre/year/runtime fields Taste DNA
+ *  aggregates over — a different shape from loadUserContext's, which drops
+ *  genre info from its rating history on purpose to keep the pick prompt
+ *  small. Taste DNA has no prompt-size pressure (only genre NAMES reach
+ *  Claude, not full movie descriptions), so nothing is trimmed here. */
+async function loadTasteContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ ratedMovies: TasteMovieRow[]; engagedGenres: Set<string> }> {
+  const [ratingsResult, wantResult] = await Promise.all([
+    supabase.from('ratings').select('tmdb_id').eq('user_id', userId),
+    supabase.from('watchlist_items').select('tmdb_id').eq('user_id', userId),
+  ])
+  if (ratingsResult.error) throw ratingsResult.error
+  if (wantResult.error) throw wantResult.error
+
+  const ratedIds = ratingsResult.data.map((r) => r.tmdb_id)
+  const allIds = [...new Set([...ratedIds, ...wantResult.data.map((w) => w.tmdb_id)])]
+
+  let movies: TasteMovieRow[] = []
+  if (allIds.length > 0) {
+    const moviesResult = await supabase
+      .from('movies_cache')
+      .select('tmdb_id, release_year, runtime_minutes, genres')
+      .in('tmdb_id', allIds)
+    if (moviesResult.error) throw moviesResult.error
+    movies = moviesResult.data
+  }
+
+  const byId = new Map(movies.map((m) => [m.tmdb_id, m]))
+  const ratedIdSet = new Set(ratedIds)
+  const ratedMovies = movies.filter((m) => ratedIdSet.has(m.tmdb_id))
+
+  const engagedGenres = new Set<string>()
+  for (const id of allIds) {
+    for (const genre of byId.get(id)?.genres ?? []) engagedGenres.add(genre)
+  }
+
+  return { ratedMovies, engagedGenres }
+}
+
+function decadeLabel(year: number): string {
+  return `${Math.floor(year / 10) * 10}s`
+}
+
+function computeBreakdowns(ratedMovies: TasteMovieRow[]): {
+  genre_breakdown: GenreCount[]
+  decade_breakdown: DecadeCount[]
+  avg_runtime_minutes: number | null
+} {
+  const genreCounts = new Map<string, number>()
+  const decadeCounts = new Map<string, number>()
+  let runtimeSum = 0
+  let runtimeCount = 0
+
+  for (const movie of ratedMovies) {
+    for (const genre of movie.genres ?? []) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1)
+    if (movie.release_year) {
+      const label = decadeLabel(movie.release_year)
+      decadeCounts.set(label, (decadeCounts.get(label) ?? 0) + 1)
+    }
+    if (movie.runtime_minutes) {
+      runtimeSum += movie.runtime_minutes
+      runtimeCount += 1
+    }
+  }
+
+  return {
+    genre_breakdown: [...genreCounts.entries()]
+      .map(([genre, count]) => ({ genre, count }))
+      .sort((a, b) => b.count - a.count),
+    decade_breakdown: [...decadeCounts.entries()]
+      .map(([decade, count]) => ({ decade, count }))
+      .sort((a, b) => a.decade.localeCompare(b.decade)),
+    avg_runtime_minutes: runtimeCount > 0 ? Math.round(runtimeSum / runtimeCount) : null,
+  }
+}
+
+/** Picks entry points for the genres the user has barely touched. Purely
+ *  deterministic (TMDB Discover, sorted by vote count) — no Claude call, so
+ *  this can't fail the way a hallucinated recommendation could, and it
+ *  costs one cheap round-trip regardless of how many genres are eligible. */
+async function findBlindSpots(engagedGenres: Set<string>): Promise<BlindSpot[]> {
+  if (!TMDB_API_KEY) return []
+
+  const eligible = Object.values(TMDB_GENRES).filter((name) => !engagedGenres.has(name))
+  // Deterministic order (alphabetical) so repeated calls for the same user
+  // surface the same blind spots rather than shuffling every request.
+  const picked = eligible.sort().slice(0, BLIND_SPOT_COUNT)
+
+  const results = await Promise.all(
+    picked.map(async (genreName) => {
+      const genreId = Object.entries(TMDB_GENRES).find(([, name]) => name === genreName)?.[0]
+      if (!genreId) return null
+
+      const url = new URL('https://api.themoviedb.org/3/discover/movie')
+      url.searchParams.set('api_key', TMDB_API_KEY as string)
+      url.searchParams.set('include_adult', 'false')
+      url.searchParams.set('with_genres', genreId)
+      url.searchParams.set('sort_by', 'vote_count.desc')
+      url.searchParams.set('vote_average.gte', '7')
+
+      const body = await tmdbGetJson<{ results?: { id: number; title: string }[] }>(url.toString())
+      const top = body?.results?.[0]
+      if (!top) return null
+
+      return {
+        genre: genreName,
+        tmdb_id: top.id,
+        title: top.title,
+        reason: `A widely loved ${genreName.toLowerCase()} film — a well-tested way in, since this genre hasn't shown up in your ratings or watchlist yet.`,
+      } satisfies BlindSpot
+    }),
+  )
+
+  return results.filter((r): r is BlindSpot => r !== null)
+}
+
+const personalityTool = {
+  name: 'write_personality',
+  description: "Write the user's Taste DNA personality label and description from their viewing stats.",
+  strict: true,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      label: {
+        type: 'string',
+        description:
+          'A short, evocative 2-4 word personality label (e.g. "The Slow-Burn Obsessive", "Comfort Rewatcher"). ' +
+          'Specific to the actual genre/decade pattern given, never generic ("Movie Lover" is a failure).',
+      },
+      description: {
+        type: 'string',
+        description:
+          'One or two sentences, addressed to the user as "you", explaining the pattern behind the label — ' +
+          'reference the actual dominant genre(s) and/or decade(s) given.',
+      },
+    },
+    required: ['label', 'description'],
+    additionalProperties: false,
+  },
+}
+
+const TASTE_SYSTEM_PROMPT = [
+  "You are Popcorn's Taste DNA engine. You turn a user's rating statistics into a short, specific",
+  'personality read.',
+  '',
+  'Rules:',
+  '- Base the label and description only on the statistics given. Never invent taste details not',
+  '  present in the data.',
+  '- Specific beats generic: name the actual dominant genre or decade. "You like movies" is a failure.',
+  '- Warm and a little playful in tone, never clinical.',
+].join('\n')
+
+async function handleTaste(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ status: number; body: unknown }> {
+  const { ratedMovies, engagedGenres } = await loadTasteContext(supabase, userId)
+
+  const coldStart = ratedMovies.length < TASTE_MIN_RATINGS
+  const { genre_breakdown, decade_breakdown, avg_runtime_minutes } = computeBreakdowns(ratedMovies)
+  // Blind spots need engagedGenres from the Supabase load above, so this
+  // can't start any earlier — no speculative-fetch trick available here.
+  const blindSpots = await findBlindSpots(engagedGenres)
+
+  let personalityLabel: string | null = null
+  let personalityDescription: string | null = null
+
+  if (!coldStart) {
+    const topGenres = genre_breakdown.slice(0, 3).map((g) => `${g.genre} (${g.count})`).join(', ')
+    const topDecades = decade_breakdown
+      .slice()
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 2)
+      .map((d) => `${d.decade} (${d.count})`)
+      .join(', ')
+
+    const userContent = [
+      `Total rated films: ${ratedMovies.length}`,
+      `Top genres by count: ${topGenres || 'none'}`,
+      `Top decades by count: ${topDecades || 'none'}`,
+      avg_runtime_minutes ? `Average runtime of rated films: ${avg_runtime_minutes} minutes` : '',
+    ]
+      .filter(Boolean)
+      .join('\n')
+
+    try {
+      const { input: copy } = await callClaudeForTool<{ label: string; description: string }>(
+        TASTE_SYSTEM_PROMPT,
+        userContent,
+        [personalityTool],
+      )
+      personalityLabel = copy.label
+      personalityDescription = copy.description
+    } catch (err) {
+      // The breakdowns and blind spots are still useful without a label —
+      // never fail the whole screen over the one decorative Claude call.
+      console.error('Taste DNA personality call failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
+  const { data: session, error: logError } = await supabase
+    .from('ai_sessions')
+    .insert({
+      user_id: userId,
+      mode: 'taste',
+      mood_text: null,
+      energy_level: null,
+      minutes_available: null,
+      company: null,
+      tier: null,
+      source_tmdb_id: null,
+      target: null,
+      recommended_tmdb_id: null,
+      reason_text: personalityLabel,
+      accepted: null,
+    })
+    .select('id')
+    .single()
+  if (logError) console.error('ai_sessions insert failed:', logError.message)
+
+  const response: TasteResponse = {
+    cold_start: coldStart,
+    total_rated: ratedMovies.length,
+    personality_label: personalityLabel,
+    personality_description: personalityDescription,
+    genre_breakdown,
+    decade_breakdown,
+    avg_runtime_minutes,
+    blind_spots: blindSpots,
+    session_id: session?.id ?? null,
+  }
+  return { status: 200, body: response }
+}
+
+// ---------------------------------------------------------------------------
 // Router
 // ---------------------------------------------------------------------------
 
@@ -1389,16 +1670,19 @@ export default async function handler(req: Request): Promise<Response> {
   }
   const userId = userData.user.id
 
-  if (mode === 'taste') {
-    return errorResponse(`mode "${mode}" is not implemented yet.`, 501, 'not_implemented')
-  }
-
-  const validated = mode === 'bridge' ? validateBridgeInput(body) : validatePickInput(body)
-  if ('problems' in validated) {
-    return json({ error: 'Invalid request body.', code: 'invalid_input', problems: validated.problems }, 400)
-  }
-
   try {
+    // Taste DNA has no request body fields to validate — it reasons over
+    // the caller's own rating history, nothing the client supplies.
+    if (mode === 'taste') {
+      const { status, body: responseBody } = await handleTaste(supabase, userId)
+      return json(responseBody, status)
+    }
+
+    const validated = mode === 'bridge' ? validateBridgeInput(body) : validatePickInput(body)
+    if ('problems' in validated) {
+      return json({ error: 'Invalid request body.', code: 'invalid_input', problems: validated.problems }, 400)
+    }
+
     const { status, body: responseBody } =
       mode === 'bridge'
         ? await handleBridge(supabase, userId, validated.input as BridgeInput)
