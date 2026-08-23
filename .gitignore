@@ -33,3 +33,6 @@ PW file for popcorn project.txt
 *.njsproj
 *.sln
 *.sw?
+
+# Local Netlify folder
+.netlify
