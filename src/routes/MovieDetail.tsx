@@ -190,7 +190,7 @@ export default function MovieDetail() {
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(async () => void (await addToWatchlist(tmdbId, user!.id)))}
-                className="rounded-lg bg-accent-warm px-4 py-2 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="btn-hero rounded-full px-5 py-2.5 font-ui text-sm font-semibold"
               >
                 Add to Watchlist
               </button>
@@ -201,7 +201,7 @@ export default function MovieDetail() {
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(() => markAsWatched(watchlistItem.id))}
-                className="rounded-lg bg-accent-warm px-4 py-2 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="btn-hero rounded-full px-5 py-2.5 font-ui text-sm font-semibold"
               >
                 Mark as Watched
               </button>
@@ -212,7 +212,7 @@ export default function MovieDetail() {
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(() => removeFromWatchlist(watchlistItem.id))}
-                className="rounded-lg border border-accent-cold/40 bg-accent-cold/10 px-4 py-2 font-ui text-sm text-accent-cold transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-5 py-2.5 font-ui text-sm text-accent-cold transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
               >
                 Remove from list
               </button>

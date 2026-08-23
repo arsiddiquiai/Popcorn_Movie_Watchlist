@@ -16,8 +16,11 @@ export function WatchlistCard({ entry }: WatchlistCardProps) {
   const runtime = formatRuntime(movie.runtime_minutes)
 
   return (
-    <Link to={`/movie/${movie.tmdb_id}`} className="flex flex-col gap-2">
-      <div className="aspect-[2/3] overflow-hidden rounded-lg bg-surface">
+    <Link
+      to={`/movie/${movie.tmdb_id}`}
+      className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
+    >
+      <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-hover:shadow-[var(--shadow-glow)]">
         {posterUrl ? (
           <img src={posterUrl} alt={movie.title} loading="lazy" className="h-full w-full object-cover" />
         ) : (
@@ -25,16 +28,25 @@ export function WatchlistCard({ entry }: WatchlistCardProps) {
             {movie.title}
           </div>
         )}
+        {score !== null && (
+          <span className="absolute right-3 top-3 rounded-full bg-accent-warm px-2 py-0.5 font-mono text-[11px] font-medium text-bg">
+            {score}/10
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-col gap-0.5">
-        <h3 className="truncate font-ui text-sm font-semibold text-text" title={movie.title}>
+      <div className="flex flex-col gap-1">
+        <h3 className="truncate font-display text-base font-semibold text-text" title={movie.title}>
           {movie.title}
         </h3>
-        <div className="flex items-center gap-2 font-ui text-xs text-muted">
+        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-muted-subtle">
           <span>{movie.release_year ?? '—'}</span>
-          {runtime && <span>{runtime}</span>}
-          {score !== null && <span className="text-accent-warm">★ {score}/10</span>}
+          {runtime && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>{runtime}</span>
+            </>
+          )}
         </div>
       </div>
     </Link>

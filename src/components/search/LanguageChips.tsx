@@ -1,12 +1,20 @@
+// Fixed display order — not alphabetical, not popularity-sorted. Matches
+// the ranked TMDB research (avg_popularity, region=IN) with Bollywood and
+// Hollywood pinned first regardless of rank, since they're the two
+// "default catalogue" filters rather than regional-discovery alternatives.
 export const LANGUAGES = [
   { code: 'all', label: 'All' },
-  { code: 'hi', label: 'Hindi' },
+  { code: 'hi', label: 'Bollywood' },
+  { code: 'en', label: 'Hollywood' },
   { code: 'ta', label: 'Tamil' },
   { code: 'te', label: 'Telugu' },
   { code: 'ml', label: 'Malayalam' },
+  { code: 'kn', label: 'Kannada' },
+  { code: 'bn', label: 'Bengali' },
+  { code: 'pa', label: 'Punjabi' },
+  { code: 'mr', label: 'Marathi' },
   { code: 'ko', label: 'Korean' },
   { code: 'ja', label: 'Japanese' },
-  { code: 'en', label: 'English' },
 ] as const
 
 interface LanguageChipsProps {

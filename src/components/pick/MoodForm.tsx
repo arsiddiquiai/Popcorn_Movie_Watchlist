@@ -107,7 +107,7 @@ export function MoodForm({ value, onChange, onSubmit, disabled }: MoodFormProps)
       <button
         type="submit"
         disabled={!canSubmit}
-        className="rounded-xl bg-accent-warm px-6 py-4 font-display text-lg text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-40"
+        className="btn-hero rounded-xl px-6 py-4 font-display text-lg disabled:opacity-40"
       >
         Pick For Me
       </button>

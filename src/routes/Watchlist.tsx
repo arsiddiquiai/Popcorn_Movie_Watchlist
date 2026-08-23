@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
 import { WatchlistCard } from '../components/watchlist/WatchlistCard'
 import { getRandomPopularMovie } from '../lib/tmdbClient'
 import { fetchWatchlistByStatus, type WatchlistEntry } from '../lib/watchlist'
+import { useTheme } from '../theme/ThemeProvider'
 
 type Tab = 'want' | 'watched'
 
@@ -15,6 +17,7 @@ const tabs: { id: Tab; label: string }[] = [
 
 export default function Watchlist() {
   const { user } = useAuth()
+  const { reducedMotion } = useTheme()
   const navigate = useNavigate()
   const [tab, setTab] = useState<Tab>('want')
   const [entries, setEntries] = useState<WatchlistEntry[]>([])
@@ -77,7 +80,7 @@ export default function Watchlist() {
             type="button"
             onClick={() => void handleSurpriseMe()}
             disabled={surprising}
-            className="rounded-lg border border-accent-warm/40 bg-accent-warm/10 px-4 py-1.5 font-ui text-sm font-semibold text-accent-warm transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+            className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-1.5 font-ui text-sm font-semibold text-accent-warm transition-colors duration-[var(--transition-fast)] hover:bg-accent-warm/20 disabled:opacity-60"
           >
             {surprising ? 'Picking…' : 'Surprise Me'}
           </button>
@@ -94,19 +97,30 @@ export default function Watchlist() {
         )}
 
         {status === 'success' && entries.length === 0 && (
-          <div className="flex flex-col items-center gap-3 py-20 text-center">
+          <div className="flex flex-col items-center gap-5 rounded-xl border border-border bg-surface px-9 py-16 text-center">
+            <motion.div
+              aria-hidden="true"
+              className="grid h-24 w-24 place-items-center rounded-xl border border-border bg-surface-2"
+              animate={reducedMotion ? undefined : { y: [0, -6, 0] }}
+              transition={reducedMotion ? undefined : { duration: 4, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <span className="font-mono text-[11px] text-muted-subtle">art</span>
+            </motion.div>
+
             {tab === 'want' ? (
               <>
-                <p className="font-ui text-sm text-muted">Nothing here yet — search to add your first movie.</p>
-                <Link
-                  to="/search"
-                  className="rounded-lg bg-accent-warm px-4 py-2 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] hover:opacity-90"
-                >
+                <div>
+                  <p className="font-display text-xl font-semibold text-text">Nothing queued yet</p>
+                  <p className="mt-2 max-w-sm font-ui text-sm text-muted">
+                    Search to add your first movie.
+                  </p>
+                </div>
+                <Link to="/search" className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold">
                   Search movies
                 </Link>
               </>
             ) : (
-              <p className="font-ui text-sm text-muted">
+              <p className="max-w-sm font-ui text-sm text-muted">
                 Nothing watched yet — movies you mark as watched will show up here.
               </p>
             )}
@@ -114,13 +128,24 @@ export default function Watchlist() {
         )}
 
         {status === 'success' && entries.length > 0 && (
-          <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+          <motion.div
+            className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+            initial={reducedMotion ? false : 'hidden'}
+            animate="visible"
+            variants={{ visible: { transition: { staggerChildren: 0.045 } } }}
+          >
             {entries.map((entry) => (
               // decayLevel (visible ageing on "want" items) hooks in here in
               // a later prompt — not built yet.
-              <WatchlistCard key={entry.item.id} entry={entry} />
+              <motion.div
+                key={entry.item.id}
+                variants={reducedMotion ? undefined : { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              >
+                <WatchlistCard entry={entry} />
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
       </div>
     </div>

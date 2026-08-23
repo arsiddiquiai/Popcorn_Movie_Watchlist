@@ -26,8 +26,8 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="aspect-[2/3] overflow-hidden rounded-lg bg-surface">
+    <div className="group flex flex-col gap-3">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] group-hover:shadow-[var(--shadow-glow)]">
         {posterUrl ? (
           <img src={posterUrl} alt={movie.title} loading="lazy" className="h-full w-full object-cover" />
         ) : (
@@ -35,18 +35,20 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
             {movie.title}
           </div>
         )}
+        {movie.vote_average > 0 && (
+          <span className="absolute right-3 top-3 rounded-full bg-accent-warm px-2 py-0.5 font-mono text-[11px] font-medium text-bg">
+            {movie.vote_average.toFixed(1)}
+          </span>
+        )}
       </div>
 
-      <div className="flex flex-col gap-0.5">
-        <h3 className="truncate font-ui text-sm font-semibold text-text" title={movie.title}>
+      <div className="flex flex-col gap-1">
+        <h3 className="truncate font-display text-base font-semibold text-text" title={movie.title}>
           {movie.title}
         </h3>
-        <div className="flex items-center gap-2 font-ui text-xs text-muted">
-          <span>{releaseYear(movie.release_date)}</span>
-          {movie.vote_average > 0 && (
-            <span className="text-accent-warm">★ {movie.vote_average.toFixed(1)}</span>
-          )}
-        </div>
+        <span className="font-mono text-[11px] uppercase tracking-wide text-muted-subtle">
+          {releaseYear(movie.release_date)}
+        </span>
       </div>
 
       <AddButton state={state} onClick={handleAdd} />
@@ -65,7 +67,7 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
 
   if (state === 'added') {
     return (
-      <div className="rounded-lg border border-accent-warm/40 bg-accent-warm/10 px-3 py-1.5 text-center font-ui text-xs font-semibold text-accent-warm">
+      <div className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-3 py-1.5 text-center font-ui text-xs font-semibold text-accent-warm">
         Added ✓
       </div>
     )
@@ -76,7 +78,7 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
       <button
         type="button"
         onClick={onClick}
-        className="rounded-lg border border-accent-cold/40 bg-accent-cold/10 px-3 py-1.5 font-ui text-xs text-accent-cold transition-colors duration-[var(--transition-fast)]"
+        className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-3 py-1.5 font-ui text-xs text-accent-cold transition-colors duration-[var(--transition-fast)]"
       >
         Couldn't add — retry
       </button>
@@ -88,7 +90,7 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
       type="button"
       onClick={onClick}
       disabled={state === 'loading'}
-      className="rounded-lg bg-accent-warm px-3 py-1.5 font-ui text-xs font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+      className="btn-hero rounded-full px-3 py-1.5 font-ui text-xs font-semibold disabled:opacity-60"
     >
       {state === 'loading' ? 'Adding…' : 'Add to Watchlist'}
     </button>

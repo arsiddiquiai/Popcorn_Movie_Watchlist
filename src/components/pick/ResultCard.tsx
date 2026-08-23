@@ -53,17 +53,17 @@ export function ResultCard({
       initial={reducedMotion ? false : { opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-accent-warm/30 bg-surface p-6 sm:p-8"
+      className="relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-accent-warm/30 bg-surface p-6 shadow-[var(--shadow-lift)] sm:p-8"
     >
       {/* One large soft bloom, no fine detail — survives video compression. */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_50%_0%,var(--accent-warm)_0%,transparent_65%)] opacity-[0.13]"
+        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_50%_0%,var(--hero)_0%,transparent_65%)] opacity-[0.16]"
       />
 
       <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
         <div className="mx-auto w-44 shrink-0 sm:mx-0 sm:w-56">
-          <div className="aspect-[2/3] overflow-hidden rounded-2xl bg-bg shadow-2xl">
+          <div className="aspect-[2/3] overflow-hidden rounded-2xl bg-bg shadow-[var(--shadow-lift)]">
             {posterUrl ? (
               <img src={posterUrl} alt={movie.title} className="h-full w-full object-cover" />
             ) : (
@@ -120,7 +120,7 @@ export function ResultCard({
                 type="button"
                 onClick={onAdd}
                 disabled={actionState === 'pending'}
-                className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
               >
                 {actionState === 'pending' ? 'Adding…' : 'Add to Watchlist'}
               </button>
@@ -131,7 +131,7 @@ export function ResultCard({
                 type="button"
                 onClick={onMarkWatched}
                 disabled={actionState === 'pending'}
-                className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
               >
                 {actionState === 'pending' ? 'Saving…' : 'Mark as Watched'}
               </button>

@@ -7,22 +7,75 @@
   (see Settings). The @theme block below aliases them into Tailwind's
   --color-* / --font-* namespaces so utilities like bg-bg, text-muted,
   bg-accent-warm/10 and font-display stay in sync automatically.
+
+  Palette: "Warm Cinematic" (imported from the claude.ai/design project
+  "Movie watchlist app UI refresh", file "Reelist Warm Cinematic
+  Tokens.dc.html"). Ember/gold on a dark-roast base, replacing the
+  original amber/near-black palette. Two deliberate departures from that
+  import, both to protect existing behaviour rather than the look:
+
+  1. --accent-cold is UNCHANGED (#5b7fa8). The design is a single warm
+     ember->gold family with no cool tone at all, but the rating slider's
+     signature cold(1)->neutral(5)->warm(10) interpolation (ratingScale.ts)
+     depends on --accent-cold and --accent-warm sitting at opposite ends
+     of a hue wheel. Reskinning --accent-warm alone keeps that contrast —
+     and the "bad ratings read cool, good ratings read warm" meaning —
+     intact; taking accent-cold from the danger token instead would have
+     made a 1/10 and a 10/10 both read as shades of red-orange.
+
+  2. --accent-warm is mapped to the import's gold (--color-accent-2,
+     #D4A24C / daylight #8A6320 / cinema #E8C87A), not its ember primary
+     (--color-accent, #C8442D). CLAUDE.md calls accent-warm "the popcorn
+     colour" and it's read everywhere in this codebase (ratings, badges,
+     positive states) — gold is the closer match, and it means every
+     existing bg-accent-warm/text-accent-warm/border-accent-warm site in
+     the app is correctly reskinned with no component edits. The design's
+     ember stays available as --color-hero (new token below) for the
+     gradient hero-CTA / poster-glow treatment the design specs
+     separately (Pick For Me submit, primary watchlist actions).
+
+  Theme mapping: the import ships three example themes named "Midnight"
+  (default dark), "Daylight" (light) and "Wrapped" (hype/near-black,
+  year-in-review) — its own handoff notes call these placeholders to
+  rename onto whatever the real system uses. Midnight -> nightcap,
+  Daylight -> daylight (name already matched). "Wrapped" is mapped onto
+  cinema: cinema's brief (near-black, minimal chrome, poster-forward) has
+  no matching example in the import, and Wrapped is the darkest, moodiest
+  of the three on offer — closest in spirit even though its base sits at
+  #1c0f0b rather than true black.
 */
 
 :root {
   color-scheme: dark;
 
-  /* nightcap (dark, default) */
-  --bg: #0b0b0f;
-  --surface: #16161d;
-  --text: #f2f0ec;
-  --muted: #8a8a96;
-  --accent-warm: #f5b841;
+  /* nightcap (dark, default) — "Midnight" in the import */
+  --bg: #161211;
+  --surface: #211b19;
+  --surface-2: #2c2422;
+  --border: #3a2e29;
+  --text: #f2e9de;
+  --muted: #a89a8c;
+  --muted-subtle: #857767;
+  --accent-warm: #d4a24c;
   --accent-cold: #5b7fa8;
+  /* Plain (unprefixed) names, aliased into Tailwind's --color- / --shadow-
+     namespace further down — same pattern as --bg/--surface/etc. Naming
+     these --color-hero directly here would self-reference against the
+     @theme entry of the same name (Tailwind's --font-display note below
+     hit the identical trap), so hero/danger/glow stay unprefixed at the
+     :root level. */
+  --hero: #c8442d;
+  --danger: #d2543f;
+  --glow: 0 0 0 1px rgb(200 68 45 / 0.55), 0 12px 44px -8px rgb(200 68 45 / 0.55);
 
-  --transition-fast: 150ms;
-  --transition-base: 300ms;
-  --transition-slow: 600ms;
+  /* Renamed in spirit from the import's --dur- / --ease-out tokens, kept under
+     the existing --transition- / --ease-standard names already threaded
+     through every component via duration-[var(--transition-fast)] etc.,
+     so this is a value-only update. --ease-standard already matched the
+     import's cubic-bezier(.22,1,.36,1) exactly. */
+  --transition-fast: 140ms;
+  --transition-base: 220ms;
+  --transition-slow: 420ms;
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
@@ -31,18 +84,31 @@
    theme-switcher swatches in Settings). */
 [data-theme='daylight'] {
   color-scheme: light;
-  --bg: #faf8f4;
-  --surface: #ffffff;
-  --text: #16161d;
-  --muted: #6b6b76;
+  --bg: #ffffff;
+  --surface: #fbf7f2;
+  --surface-2: #f1e9df;
+  --border: #e0d5c8;
+  --text: #1b1513;
+  --muted: #6e6155;
+  --muted-subtle: #93857a;
+  /* Deepened for AA on warm white — the import's own daylight delta. */
+  --accent-warm: #8a6320;
+  --hero: #a33520;
+  --glow: 0 0 0 1px rgb(163 53 32 / 0.35), 0 12px 36px -10px rgb(163 53 32 / 0.35);
 }
 
 [data-theme='cinema'] {
   color-scheme: dark;
-  --bg: #000000;
-  --surface: #0a0a0a;
-  --text: #e8e6e2;
-  --muted: #6a6a72;
+  /* "Wrapped" in the import — see the mapping note above. */
+  --bg: #1c0f0b;
+  --surface: #26160f;
+  --surface-2: #33201a;
+  --border: #4a2e22;
+  --text: #fbefe3;
+  --muted: #b29a86;
+  --accent-warm: #e8c87a;
+  --hero: #e0562f;
+  --glow: 0 0 0 1px rgb(212 162 76 / 0.55), 0 14px 48px -8px rgb(212 162 76 / 0.6);
 }
 
 :root[data-reduced-motion='true'] {
@@ -63,17 +129,44 @@
 @theme {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
   --color-text: var(--text);
   --color-muted: var(--muted);
+  --color-muted-subtle: var(--muted-subtle);
   --color-accent-warm: var(--accent-warm);
   --color-accent-cold: var(--accent-cold);
+  --color-hero: var(--hero);
+  --color-danger: var(--danger);
+
+  /* Radius and the two static shadows don't vary by theme, so — unlike
+     the colours above — they're declared directly here rather than
+     routed through a :root-level indirection. This also overrides
+     Tailwind v4's own default --radius-md/--radius-lg/--radius-xl scale,
+     so every existing rounded-md/rounded-lg/rounded-xl site in the app
+     (poster cards, buttons, panels) already picks up the design's 14 /
+     20 / 28px scale with no className changes. */
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 20px;
+  --radius-xl: 28px;
+
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.4);
+  --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.75);
+  --shadow-glow: var(--glow);
+  --shadow-glow-2: 0 0 0 1px rgb(212 162 76 / 0.5), 0 12px 40px -8px rgb(212 162 76 / 0.45);
 
   /* Declared here (Tailwind's --font-* namespace) rather than in :root
      above, since a var() alias with the same name would self-reference.
      Tailwind emits @theme entries as real :root custom properties, so
-     var(--font-display) / var(--font-ui) still work anywhere. */
-  --font-display: 'Archivo Black', 'Arial Black', sans-serif;
-  --font-ui: 'Inter', system-ui, -apple-system, sans-serif;
+     var(--font-display) / var(--font-ui) / var(--font-mono) still work
+     anywhere. font-ui keeps its existing name (Manrope replaces Inter as
+     its value) so every existing font-ui site is reskinned for free;
+     font-mono is new, for the design's data/meta typography (runtime,
+     year, ratings-panel numerals, stat rows). */
+  --font-display: 'Space Grotesk', ui-sans-serif, sans-serif;
+  --font-ui: 'Manrope', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
 /*
@@ -147,6 +240,52 @@
 :focus-visible {
   outline: 2px solid var(--accent-warm);
   outline-offset: 2px;
+}
+
+/* From the design import's section 05 (poster grid skeleton). Respects
+   reduced motion via the same data-reduced-motion gate as everything else
+   — that attribute zeroes animation-duration globally above. */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.shimmer {
+  background-image: linear-gradient(90deg, var(--surface) 25%, var(--surface-2) 37%, var(--surface) 63%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+/* Design import section 04 ("primary" button): gradient fill, dark label,
+   glow shadow, lift on hover, scale down on tap. One shared recipe so every
+   primary CTA in the app (Add to Watchlist, Pick For Me submit, Mark
+   Watched, etc.) reads as the same control without repeating the same long
+   className everywhere it's used. */
+.btn-hero {
+  color: var(--bg);
+  background: linear-gradient(135deg, var(--hero) 0%, var(--accent-warm) 100%);
+  box-shadow: 0 10px 30px -10px rgb(200 68 45 / 0.8);
+  transition:
+    transform var(--transition-fast) var(--ease-standard),
+    box-shadow var(--transition-fast) var(--ease-standard),
+    opacity var(--transition-fast) var(--ease-standard);
+}
+
+.btn-hero:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 44px -10px rgb(212 162 76 / 0.9);
+}
+
+.btn-hero:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.btn-hero:disabled {
+  opacity: 0.6;
 }
 
 html,
