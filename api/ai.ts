@@ -568,6 +568,26 @@ function buildCombinedResult(
  *  rather than jumping straight to "anything goes". */
 const COLD_START_RUNTIME_TOLERANCES = [15, 30, 60]
 
+/**
+ * Copy for the substitution paths below, where Claude named a tmdb_id that
+ * wasn't in any pool we offered and the server swaps in a known-good film.
+ *
+ * Claude's own `reason` MUST be discarded when that happens. It was written
+ * about the film Claude picked, not the one being substituted in, so reusing
+ * it presents a confident, specific justification for a film nobody chose —
+ * "you rated Sicario 9 and this has the same slow dread" attached to an
+ * unrelated title. Wrong and specific is worse than right and plain.
+ *
+ * Regenerating the reason would mean a second Claude call, which is the exact
+ * cost this file's single-call design exists to avoid (see
+ * handleCombinedPick). So these state only what the server actually knows to
+ * be true of the substitute, and never claim a taste or mood match.
+ */
+const SUBSTITUTE_REASON_CATALOGUE =
+  "Not from your list — a well-reviewed option that fits the time you have tonight."
+const SUBSTITUTE_REASON_WATCHLIST =
+  'From your watchlist, and a straightforward option for tonight.'
+
 /** Cold start: fewer than 3 ratings, so there is no taste to reason over.
  *  Heuristics choose the film; Claude only writes the copy.
  *
@@ -670,11 +690,12 @@ async function handleTier2(
   return (
     buildResult(picked, allowed, 2, coldStart) ??
     // Claude named something outside the candidate list — fall back to the
-    // most popular result rather than failing the request.
+    // most popular result rather than failing the request. picked.reason is
+    // deliberately dropped: it describes the film Claude named, not this one.
     {
       tier: 2,
       tmdb_id: discovered[0].tmdb_id,
-      reason: picked.reason,
+      reason: SUBSTITUTE_REASON_CATALOGUE,
       alternates: discovered.slice(1, 3).map((m) => ({
         tmdb_id: m.tmdb_id,
         reason: 'Another option that fits your time and mood.',
@@ -728,12 +749,13 @@ async function handleCombinedPick(
     buildCombinedResult(picked, watchlistIds, catalogueIds, coldStart) ??
     // Claude named something outside both pools — fall back to the most
     // popular catalogue result (or the first watchlist item, if there's no
-    // catalogue) rather than failing the request.
+    // catalogue) rather than failing the request. picked.reason is
+    // deliberately dropped: it describes the film Claude named, not this one.
     (catalogue.length > 0
       ? {
           tier: 2,
           tmdb_id: catalogue[0].tmdb_id,
-          reason: picked.reason,
+          reason: SUBSTITUTE_REASON_CATALOGUE,
           alternates: catalogue.slice(1, 3).map((m) => ({
             tmdb_id: m.tmdb_id,
             reason: 'Another option that fits your time and mood.',
@@ -743,7 +765,7 @@ async function handleCombinedPick(
       : {
           tier: 1,
           tmdb_id: candidates[0].tmdb_id,
-          reason: picked.reason,
+          reason: SUBSTITUTE_REASON_WATCHLIST,
           alternates: candidates.slice(1, 3).map((m) => ({
             tmdb_id: m.tmdb_id,
             reason: 'Another option from your watchlist.',
