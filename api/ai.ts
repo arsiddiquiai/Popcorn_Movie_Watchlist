@@ -1660,6 +1660,24 @@ const ASSISTANT_MESSAGE_MAX_CHARS = 1000
  *  file: trim server-side, never trust the caller's payload size. */
 const ASSISTANT_MAX_HISTORY_MESSAGES = 10
 
+/**
+ * Length caps on history content.
+ *
+ * The message field was always capped, but history content was not — only
+ * its shape and array length were checked. A security audit drove 10 turns
+ * of 200k characters through this endpoint and built a 668,005-token
+ * prompt from a single request: a ~300x cost amplification per call, and
+ * the daily message cap counts requests, not tokens, so it did nothing to
+ * bound the spend.
+ *
+ * A single turn over ENTRY_MAX is not a real conversation turn — that is a
+ * client bug or an attack, so it is rejected outright. Total size is
+ * handled the way the array length already is: trim the oldest turns until
+ * it fits, rather than failing a legitimately long conversation.
+ */
+const ASSISTANT_HISTORY_ENTRY_MAX_CHARS = 4_000
+const ASSISTANT_HISTORY_TOTAL_MAX_CHARS = 20_000
+
 function validateAssistantInput(raw: unknown): { input: AssistantInput } | { problems: string[] } {
   const problems: string[] = []
   const body = (raw ?? {}) as Record<string, unknown>
@@ -1687,7 +1705,19 @@ function validateAssistantInput(raw: unknown): { input: AssistantInput } | { pro
       if (!valid) {
         problems.push('Each history entry must have role "user"|"assistant" and string content.')
       } else {
-        history = (body.history as AssistantMessage[]).slice(-ASSISTANT_MAX_HISTORY_MESSAGES)
+        const trimmed = (body.history as AssistantMessage[]).slice(-ASSISTANT_MAX_HISTORY_MESSAGES)
+        if (trimmed.some((turn) => turn.content.length > ASSISTANT_HISTORY_ENTRY_MAX_CHARS)) {
+          problems.push(`Each history entry must be ${ASSISTANT_HISTORY_ENTRY_MAX_CHARS} characters or fewer.`)
+        } else {
+          // Drop the oldest turns until the whole history fits the budget.
+          while (
+            trimmed.length > 0 &&
+            trimmed.reduce((sum, turn) => sum + turn.content.length, 0) > ASSISTANT_HISTORY_TOTAL_MAX_CHARS
+          ) {
+            trimmed.shift()
+          }
+          history = trimmed
+        }
       }
     }
   }
@@ -1955,9 +1985,14 @@ async function executeAssistantTool(
         addedTmdbId: tmdb_id,
       }
     } catch (err) {
+      // The real error goes to the server log only. It must NOT go into the
+      // tool result: Claude reads that and may paraphrase it to the user, so
+      // a Postgres message would surface table names and RLS internals in
+      // chat. Same reasoning as the generic errorResponse() strings.
+      console.error('add_to_watchlist failed:', err instanceof Error ? err.message : err)
       return {
         toolUseId: toolUse.id,
-        content: JSON.stringify({ error: err instanceof Error ? err.message : 'Failed to add to watchlist.' }),
+        content: JSON.stringify({ error: 'Failed to add to watchlist.' }),
       }
     }
   }
