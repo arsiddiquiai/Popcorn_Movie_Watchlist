@@ -1,7 +1,7 @@
 // CLAUDE.md's "Parked" list, verbatim — a roadmap statement, not a promise
-// with a date. No functionality behind any of these.
+// with a date. No functionality behind any of these. AI Movie Assistant is
+// no longer here — it shipped, and lives in the Discover nav group instead.
 const COMING_SOON = [
-  { title: 'AI Movie Assistant', description: 'A conversational assistant for movie discovery.' },
   { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
   { title: 'Public share links', description: 'Read-only links to share your watchlist or ratings.' },
   { title: 'Social feed / following', description: 'See what friends are watching and rating.' },

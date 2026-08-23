@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthGate } from './auth/AuthGate'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedLayout } from './auth/ProtectedLayout'
+import Assistant from './routes/Assistant'
 import CinemaBridge from './routes/CinemaBridge'
 import ComingSoon from './routes/ComingSoon'
 import MovieDetail from './routes/MovieDetail'
@@ -31,6 +32,7 @@ function App() {
               <Route path="/search" element={<Search />} />
               <Route path="/movie/:tmdbId" element={<MovieDetail />} />
               <Route path="/bridge" element={<CinemaBridge />} />
+              <Route path="/assistant" element={<Assistant />} />
               <Route path="/pick" element={<PickForMe />} />
               <Route path="/taste" element={<TasteDNA />} />
               <Route path="/coming-soon" element={<ComingSoon />} />

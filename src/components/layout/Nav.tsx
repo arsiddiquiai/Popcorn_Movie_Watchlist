@@ -17,6 +17,7 @@ export const groups: NavGroup[] = [
     items: [
       { to: '/search', label: 'Search' },
       { to: '/bridge', label: 'Cinema Bridge' },
+      { to: '/assistant', label: 'Movie Assistant' },
     ],
   },
   {

@@ -103,9 +103,9 @@ movies_cache     tmdb_id(pk) · title · poster_path · backdrop_path · release
 watchlist_items  id · user_id · tmdb_id · status(want|watched|dropped) · added_at · watched_at
 ratings          id · user_id · tmdb_id · score(int 1-10) · reason_tags(text[]) ·
                  review_text · created_at
-ai_sessions      id · user_id · mode(pick|bridge|taste) · mood_text · energy_level ·
-                 minutes_available · company · tier(1|2) · recommended_tmdb_id ·
-                 reason_text · accepted(bool) · created_at
+ai_sessions      id · user_id · mode(pick|bridge|taste|assistant) · mood_text · energy_level ·
+                 minutes_available · company · tier(1|2) · source_tmdb_id · target ·
+                 recommended_tmdb_id · reason_text · accepted(bool) · created_at
 ```
 
 RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`.
@@ -124,6 +124,7 @@ RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings
 | Movie Detail | Both | Metadata, trailer, cast, providers, mark watched, slider, share |
 | Pick For Me | Decide | Mood input → transformation → single result card |
 | Cinema Bridge | Discover | Cross-industry equivalents |
+| Movie Assistant | Discover | Conversational discovery — chat, tool-assisted search, add to watchlist |
 | Taste DNA | — | Animated stats, personality, Blind Spots |
 | Settings | — | Themes, reduced motion, export, Coming Soon |
 
@@ -149,18 +150,25 @@ RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings
 ### `mode: taste` — Taste DNA + Blind Spots
 - Personality label, genre/decade/runtime breakdowns (Recharts), plus unexplored territory with 3 entry-point suggestions
 
+### `mode: assistant` — AI Movie Assistant
+- **Input:** the new message, plus recent conversation turns held client-side (no server-side chat storage — nothing persists across sessions)
+- **Process:** multi-turn tool-use loop (`tool_choice: auto`, not the forced single-call pattern the other three modes use) — Claude can call `search_movies_by_title`, `discover_movies_by_criteria`, or `add_to_watchlist` as the conversation needs, capped at **3 tool calls per turn** as a guardrail, not a tight constraint. Every film discussed must come from a tool result — never invented from memory, same anti-hallucination principle as Cinema Bridge's validation gate, enforced here by never giving Claude a bare "name a movie" path at all.
+- **Redirects, doesn't replicate:** a mood/energy/time/company request gets pointed at Pick For Me rather than reasoned through here (the assistant has no access to ratings/watchlist context Pick For Me uses); a cross-industry/language request gets pointed at Cinema Bridge rather than guessed at without its validation gate.
+- ⚠️ **Usage cap: 30 messages per user per UTC calendar day**, checked against `ai_sessions` (`mode='assistant'`, same user, `created_at` within today) **before** calling Claude — a capped-out user must never trigger a paid call. Resets at UTC midnight. This protects real cost at scale now that the app is shared broadly, not just demoed.
+- Log every call to `ai_sessions`
+
 ---
 
 ## Scope discipline
 
 **Must:** auth · search · watchlist · mark watched · rating slider · movie detail · Pick For Me · Discover/Decide split · themes · regional-language discovery · trending.
 
-**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion.
+**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap).
 
 **Could (cut in this order if hours slip):** watch providers → CSV export → reviews → Blind Spots.
 
 **Parked — do not build. Surface on the Coming Soon page instead:**
-AI Movie Assistant · TV shows & web series · public share links · social feed / following · Duo Match · PDF export.
+TV shows & web series · public share links · social feed / following · Duo Match · PDF export.
 
 If asked to add something outside this list, **flag it rather than building it.**
 

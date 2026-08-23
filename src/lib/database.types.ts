@@ -6,7 +6,7 @@
 export type Json = string | number | boolean | null | { [key: string]: Json | undefined } | Json[]
 
 export type WatchlistStatus = 'want' | 'watched' | 'dropped'
-export type AiSessionMode = 'pick' | 'bridge' | 'taste'
+export type AiSessionMode = 'pick' | 'bridge' | 'taste' | 'assistant'
 
 export interface Database {
   public: {
