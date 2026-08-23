@@ -251,6 +251,7 @@ export default function MovieDetail() {
               onRelease={(score) =>
                 setRelease((prev) => ({ effect: releaseEffectFor(score), token: prev.token + 1 }))
               }
+              onRatingSaved={setRating}
             />
           )}
 

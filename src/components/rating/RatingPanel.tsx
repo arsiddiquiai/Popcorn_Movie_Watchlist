@@ -26,9 +26,22 @@ interface RatingPanelProps {
   /** Reports the live value so the page's poster can react to it. */
   onScoreChange: (score: number) => void
   onRelease: (score: number) => void
+  /** Fires after a score save succeeds (both a brand-new rating and a
+   *  re-rate). Without this, the parent page's own idea of "is this movie
+   *  rated" never updates after the first save in a session — it stays
+   *  whatever existingRating was at mount, since this panel otherwise
+   *  keeps the saved Rating entirely to itself. */
+  onRatingSaved?: (rating: Rating) => void
 }
 
-export function RatingPanel({ tmdbId, userId, existingRating, onScoreChange, onRelease }: RatingPanelProps) {
+export function RatingPanel({
+  tmdbId,
+  userId,
+  existingRating,
+  onScoreChange,
+  onRelease,
+  onRatingSaved,
+}: RatingPanelProps) {
   const { reducedMotion } = useTheme()
   const { cold, neutral, warm } = useRatingColors()
 
@@ -77,12 +90,13 @@ export function RatingPanel({ tmdbId, userId, existingRating, onScoreChange, onR
       const saved = await saveScore(userId, tmdbId, finalScore)
       setRating(saved)
       setTags(saved.reason_tags ?? [])
+      onRatingSaved?.(saved)
     } catch {
       setSaveError(true)
     } finally {
       setSaving(false)
     }
-  }, [onRelease, panelControls, reducedMotion, tmdbId, userId])
+  }, [onRatingSaved, onRelease, panelControls, reducedMotion, tmdbId, userId])
 
   // Release is tracked on the window rather than the input: dragging a
   // range thumb frequently ends with the pointer outside the element.

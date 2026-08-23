@@ -10,17 +10,6 @@ const themeOptions: { id: Theme; label: string; description: string }[] = [
   { id: 'cinema', label: 'Cinema', description: 'Near-black, minimal chrome, poster-forward.' },
 ]
 
-/** CLAUDE.md's "Parked" list, verbatim — a roadmap statement, not a
- *  promise with a date. No functionality behind any of these. */
-const COMING_SOON = [
-  { title: 'AI Movie Assistant', description: 'A conversational assistant for movie discovery.' },
-  { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
-  { title: 'Public share links', description: 'Read-only links to share your watchlist or ratings.' },
-  { title: 'Social feed / following', description: 'See what friends are watching and rating.' },
-  { title: 'Duo Match', description: 'Find something to watch together with a partner.' },
-  { title: 'PDF export', description: 'Download your watchlist as a formatted document.' },
-]
-
 type ExportState = 'idle' | 'exporting' | 'error'
 
 export default function Settings() {
@@ -121,26 +110,6 @@ export default function Settings() {
         {exportState === 'error' && (
           <p className="font-ui text-xs text-accent-cold">Couldn't export your data. Try again.</p>
         )}
-      </section>
-
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-xs uppercase tracking-wider text-muted">Coming Soon</h2>
-        <div className="flex flex-col gap-2">
-          {COMING_SOON.map((item) => (
-            <div
-              key={item.title}
-              className="flex items-start justify-between gap-3 rounded-xl border border-border/60 bg-surface/50 px-4 py-3"
-            >
-              <div>
-                <p className="font-ui text-sm text-muted">{item.title}</p>
-                <p className="font-ui text-xs text-muted-subtle">{item.description}</p>
-              </div>
-              <span className="shrink-0 rounded-full border border-border px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-wide text-muted-subtle">
-                Planned
-              </span>
-            </div>
-          ))}
-        </div>
       </section>
 
       <footer className="border-t border-muted/15 pt-6">

@@ -31,6 +31,7 @@ export const groups: NavGroup[] = [
 
 const moreLinks = [
   { to: '/taste', label: 'Taste DNA' },
+  { to: '/coming-soon', label: 'Coming Soon' },
   { to: '/settings', label: 'Settings' },
 ]
 

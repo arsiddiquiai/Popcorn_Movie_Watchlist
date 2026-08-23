@@ -3,6 +3,7 @@ import { AuthGate } from './auth/AuthGate'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedLayout } from './auth/ProtectedLayout'
 import CinemaBridge from './routes/CinemaBridge'
+import ComingSoon from './routes/ComingSoon'
 import MovieDetail from './routes/MovieDetail'
 import PickForMe from './routes/PickForMe'
 import ResetPassword from './routes/ResetPassword'
@@ -32,6 +33,7 @@ function App() {
               <Route path="/bridge" element={<CinemaBridge />} />
               <Route path="/pick" element={<PickForMe />} />
               <Route path="/taste" element={<TasteDNA />} />
+              <Route path="/coming-soon" element={<ComingSoon />} />
               <Route path="/settings" element={<Settings />} />
               {/* Unmatched paths land here. ProtectedLayout (the parent
                   route) runs its auth check first, so a logged-out visit
