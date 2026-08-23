@@ -57,7 +57,7 @@ function getAnthropic(): Anthropic {
   if (!anthropicClient) {
     anthropicClient = new Anthropic({
       apiKey: ANTHROPIC_API_KEY,
-      timeout: 8_000, // milliseconds in the TS SDK
+      timeout: 14_000, // milliseconds in the TS SDK
       maxRetries: 0,
     })
   }
