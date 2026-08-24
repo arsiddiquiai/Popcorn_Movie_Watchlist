@@ -27,8 +27,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { Database } from '../../src/lib/database.types'
-import { sendErrorAlert } from '../../server/email.ts'
+import type { Database } from '../../src/lib/database.types.js'
+import { sendErrorAlert } from '../../server/email.js'
 
 // ---------------------------------------------------------------------------
 // Environment

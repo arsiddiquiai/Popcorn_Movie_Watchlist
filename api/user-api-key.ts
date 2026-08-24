@@ -36,8 +36,8 @@
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { AiProvider, Database } from '../src/lib/database.types.ts'
-import { encryptSecret } from '../server/crypto.ts'
+import type { AiProvider, Database } from '../src/lib/database.types.js'
+import { encryptSecret } from '../server/crypto.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY

@@ -1,6 +1,6 @@
-import { decryptSecret } from './crypto.ts'
-import type { ProviderName } from './providers/types.ts'
-import { getServiceClient } from './serviceClient.ts'
+import { decryptSecret } from './crypto.js'
+import type { ProviderName } from './providers/types.js'
+import { getServiceClient } from './serviceClient.js'
 
 export interface UserProviderPreference {
   provider: ProviderName

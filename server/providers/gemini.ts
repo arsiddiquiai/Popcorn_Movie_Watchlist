@@ -3,8 +3,8 @@
  * verified against https://ai.google.dev live docs, not recalled from
  * training.
  */
-import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.ts'
-import { AdapterError } from './types.ts'
+import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.js'
+import { AdapterError } from './types.js'
 
 /** "gemini-3.6-flash" — confirmed against the live API, not docs: an initial
  *  doc-sourced guess of "gemini-3.7-flash" turned out to be wrong, and

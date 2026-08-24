@@ -17,10 +17,10 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { Database } from '../src/lib/database.types'
-import { loadUserProviderPreference } from '../server/byok.ts'
-import { sendErrorAlert } from '../server/email.ts'
-import { AdapterError, createAdapter, type ToolSchema } from '../server/providers/index.ts'
+import type { Database } from '../src/lib/database.types.js'
+import { loadUserProviderPreference } from '../server/byok.js'
+import { sendErrorAlert } from '../server/email.js'
+import { AdapterError, createAdapter, type ToolSchema } from '../server/providers/index.js'
 
 // ---------------------------------------------------------------------------
 // Environment

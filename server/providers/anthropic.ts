@@ -1,6 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk'
-import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.ts'
-import { AdapterError } from './types.ts'
+import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.js'
+import { AdapterError } from './types.js'
 
 /** Same default as the shared-key path elsewhere in this file's sibling
  *  (api/ai.ts's MODEL const) — Haiku for cost control when the user hasn't

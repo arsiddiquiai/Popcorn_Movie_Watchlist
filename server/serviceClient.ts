@@ -22,7 +22,7 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { Database } from '../src/lib/database.types.ts'
+import type { Database } from '../src/lib/database.types.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
 const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY

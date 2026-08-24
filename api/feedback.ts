@@ -13,8 +13,8 @@
  */
 import { createClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
-import type { Database } from '../src/lib/database.types'
-import { sendEmail } from '../server/email.ts'
+import type { Database } from '../src/lib/database.types.js'
+import { sendEmail } from '../server/email.js'
 
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY ?? process.env.VITE_SUPABASE_ANON_KEY

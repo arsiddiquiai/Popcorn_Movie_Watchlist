@@ -1,10 +1,10 @@
-import { createAnthropicAdapter } from './anthropic.ts'
-import { createGeminiAdapter } from './gemini.ts'
-import { createOpenAiAdapter } from './openai.ts'
-import type { ModelAdapter, ProviderName } from './types.ts'
+import { createAnthropicAdapter } from './anthropic.js'
+import { createGeminiAdapter } from './gemini.js'
+import { createOpenAiAdapter } from './openai.js'
+import type { ModelAdapter, ProviderName } from './types.js'
 
-export { AdapterError } from './types.ts'
-export type { ModelAdapter, ProviderName, StructuredCallParams, StructuredCallResult, ToolSchema } from './types.ts'
+export { AdapterError } from './types.js'
+export type { ModelAdapter, ProviderName, StructuredCallParams, StructuredCallResult, ToolSchema } from './types.js'
 
 export function createAdapter(provider: ProviderName, apiKey: string, modelPref?: string | null): ModelAdapter {
   switch (provider) {

@@ -6,8 +6,8 @@
  * server/ talks to TMDB and Resend — one fewer dependency, and this is a
  * single endpoint, not enough surface to justify a full SDK.
  */
-import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.ts'
-import { AdapterError } from './types.ts'
+import type { ModelAdapter, StructuredCallParams, StructuredCallResult } from './types.js'
+import { AdapterError } from './types.js'
 
 /** "gpt-5.6-luna" — OpenAI's current cheapest tier with function-calling
  *  support, the closest analogue to Haiku's role as the shared-key default. */
