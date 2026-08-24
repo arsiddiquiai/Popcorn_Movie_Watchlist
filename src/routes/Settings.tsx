@@ -12,7 +12,7 @@ import type { Theme } from '../theme/types'
 const themeOptions: { id: Theme; label: string; description: string }[] = [
   { id: 'nightcap', label: 'Nightcap', description: 'Dark and warm. The default.' },
   { id: 'daylight', label: 'Daylight', description: 'Light, bright, high contrast.' },
-  { id: 'cinema', label: 'Cinema', description: 'Near-black, minimal chrome, poster-forward.' },
+  { id: 'neon', label: 'Neon', description: 'Marquee magenta and cyan on violet-black.' },
 ]
 
 const PROVIDER_LABELS: Record<AiProvider, string> = { anthropic: 'Anthropic (Claude)', openai: 'OpenAI', gemini: 'Google Gemini' }
@@ -124,13 +124,25 @@ export default function Settings() {
                   isActive ? 'border-accent-warm bg-accent-warm/10' : 'border-border bg-surface hover:border-muted/40'
                 }`}
               >
+                {/* A live miniature of the theme, not an abstract two-tone
+                    chip: three poster rectangles, a text line and an accent
+                    pill, all reading their own colours through the nested
+                    data-theme scope. That scoping is exactly why the tokens
+                    were kept out of :root-only scope in index.css. */}
                 <span
                   data-theme={option.id}
                   aria-hidden="true"
-                  className="flex h-8 w-14 overflow-hidden rounded-md border border-border"
+                  className="flex h-12 w-[72px] flex-col justify-between overflow-hidden rounded-md border border-border bg-bg p-1.5"
                 >
-                  <span className="h-full w-1/2 bg-bg" />
-                  <span className="h-full w-1/2 bg-accent-warm" />
+                  <span className="flex gap-1">
+                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
+                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
+                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span className="h-1 flex-1 rounded-full bg-text/70" />
+                    <span className="h-2 w-2 shrink-0 rounded-full bg-accent-warm" />
+                  </span>
                 </span>
                 <span className="font-ui text-sm font-semibold text-text">{option.label}</span>
                 <span className="font-ui text-xs text-muted">{option.description}</span>

@@ -3,19 +3,33 @@ import { MotionConfig } from 'framer-motion'
 import { useAuth } from '../auth/AuthProvider'
 import type { Profile } from '../lib/database.types'
 import { supabase } from '../lib/supabaseClient'
-import type { Theme, ThemeContextValue } from './types'
+import { RETIRED_THEMES, type Theme, type ThemeContextValue } from './types'
 
 const THEME_KEY = 'popcorn:theme'
 const REDUCED_MOTION_KEY = 'popcorn:reduced-motion'
 const DEFAULT_THEME: Theme = 'nightcap'
 
-const THEMES: Theme[] = ['nightcap', 'daylight', 'cinema']
+const THEMES: Theme[] = ['nightcap', 'daylight', 'neon']
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
+/**
+ * Normalises any stored theme string into a currently-valid Theme.
+ *
+ * Order matters: a retired name is mapped to its replacement BEFORE the
+ * validity check, so `cinema` resolves to `neon` rather than failing the
+ * check and silently becoming the default. Shared by both the localStorage
+ * read below and the Supabase profile pull, since either can hold a stale
+ * value independently.
+ */
+function normaliseTheme(stored: string | null | undefined): Theme | null {
+  if (!stored) return null
+  const migrated = RETIRED_THEMES[stored] ?? stored
+  return (THEMES as string[]).includes(migrated) ? (migrated as Theme) : null
+}
+
 function readStoredTheme(): Theme {
-  const stored = window.localStorage.getItem(THEME_KEY)
-  return (THEMES as string[]).includes(stored ?? '') ? (stored as Theme) : DEFAULT_THEME
+  return normaliseTheme(window.localStorage.getItem(THEME_KEY)) ?? DEFAULT_THEME
 }
 
 function readStoredReducedMotion(): boolean {
@@ -73,7 +87,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
       if (cancelled) return
       if (data) {
-        if ((THEMES as string[]).includes(data.theme_pref ?? '')) setTheme(data.theme_pref as Theme)
+        // Same migration as the localStorage path — a profile row written
+        // before `cinema` was retired must resolve to `neon`, not default.
+        // The push effect below then writes the migrated value back, so the
+        // stale name clears itself from the row on next render.
+        const migrated = normaliseTheme(data.theme_pref)
+        if (migrated) setTheme(migrated)
         if (typeof data.reduced_motion === 'boolean') setReducedMotion(data.reduced_motion)
       }
       hydratedForUserId.current = userId

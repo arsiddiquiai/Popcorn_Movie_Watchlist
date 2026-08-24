@@ -24,7 +24,7 @@
      made a 1/10 and a 10/10 both read as shades of red-orange.
 
   2. --accent-warm is mapped to the import's gold (--color-accent-2,
-     #D4A24C / daylight #8A6320 / cinema #E8C87A), not its ember primary
+     #D4A24C / daylight #8A6320), not its ember primary
      (--color-accent, #C8442D). CLAUDE.md calls accent-warm "the popcorn
      colour" and it's read everywhere in this codebase (ratings, badges,
      positive states) — gold is the closer match, and it means every
@@ -38,11 +38,13 @@
   (default dark), "Daylight" (light) and "Wrapped" (hype/near-black,
   year-in-review) — its own handoff notes call these placeholders to
   rename onto whatever the real system uses. Midnight -> nightcap,
-  Daylight -> daylight (name already matched). "Wrapped" is mapped onto
-  cinema: cinema's brief (near-black, minimal chrome, poster-forward) has
-  no matching example in the import, and Wrapped is the darkest, moodiest
-  of the three on offer — closest in spirit even though its base sits at
-  #1c0f0b rather than true black.
+  Daylight -> daylight (name already matched). The import's third theme
+  was originally mapped onto `cinema`; that theme has since been replaced
+  wholesale by `neon` (DESIGN.md §2), which is not from the import at all
+  — see its own block below for why.
+
+  Note point 1 above holds for nightcap and daylight only: `neon` DOES
+  override --accent-cold, deliberately, and says so at its declaration.
 */
 
 :root {
@@ -69,7 +71,16 @@
      :root level. */
   --hero: #c8442d;
   --danger: #d2543f;
+  /* The label colour on .btn-hero's gradient. It was hardcoded to var(--bg),
+     which happens to work on both warm themes (dark ink on ember/gold) but
+     fails on any theme whose --hero is itself dark — neon's violet being the
+     case that exposed it. Every theme now states its own answer rather than
+     assuming the background colour doubles as readable ink. */
+  --hero-ink: var(--bg);
   --glow: 0 0 0 1px rgb(200 68 45 / 0.55), 0 12px 44px -8px rgb(200 68 45 / 0.55);
+  /* .btn-hero's hover shadow, previously hardcoded ember rgb() in the rule
+     itself and therefore theme-blind. */
+  --glow-strong: 0 16px 44px -10px rgb(212 162 76 / 0.9);
 
   /* Renamed in spirit from the import's --dur- / --ease-out tokens, kept under
      the existing --transition- / --ease-standard names already threaded
@@ -80,6 +91,37 @@
   --transition-base: 220ms;
   --transition-slow: 420ms;
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/*
+  nightcap's values live in :root (it's the default), which is fine for the
+  document itself but breaks the nested-preview case: a
+  [data-theme='nightcap'] element inside a neon-themed page found no scoped
+  --accent-warm to resolve against and inherited neon's magenta, so the
+  Nightcap swatch previewed the wrong accent. Verified in-browser: with root
+  = neon, the nightcap swatch reported --accent-warm: #ff3d8a.
+
+  Restating nightcap's theme-varying tokens under an explicit attribute
+  selector gives the nested scope something real to resolve against. :root
+  keeps its own copy above so the default still applies with no attribute
+  set at all (first paint, before ThemeProvider's effect runs).
+*/
+[data-theme='nightcap'] {
+  color-scheme: dark;
+  --bg: #161211;
+  --surface: #211b19;
+  --surface-2: #2c2422;
+  --border: #3a2e29;
+  --text: #f2e9de;
+  --muted: #a89a8c;
+  --muted-subtle: #908272;
+  --accent-warm: #d4a24c;
+  --accent-cold: #5b7fa8;
+  --hero: #c8442d;
+  --danger: #d2543f;
+  --hero-ink: var(--bg);
+  --glow: 0 0 0 1px rgb(200 68 45 / 0.55), 0 12px 44px -8px rgb(200 68 45 / 0.55);
+  --glow-strong: 0 16px 44px -10px rgb(212 162 76 / 0.9);
 }
 
 /* Not scoped to :root so a nested element can carry its own data-theme
@@ -98,25 +140,87 @@
   /* Deepened for AA on warm white — the import's own daylight delta. */
   --accent-warm: #8a6320;
   --hero: #a33520;
+  /* Deep ember on light ground — a light label is the readable one here,
+     unlike nightcap where --bg (near-black) is correct. */
+  --hero-ink: #ffffff;
   --glow: 0 0 0 1px rgb(163 53 32 / 0.35), 0 12px 36px -10px rgb(163 53 32 / 0.35);
+  --glow-strong: 0 16px 44px -10px rgb(163 53 32 / 0.5);
 }
 
-[data-theme='cinema'] {
+/*
+  neon — replaces the old `cinema` theme (DESIGN.md §2).
+
+  `cinema` was #1c0f0b against nightcap's #161211: two warm near-blacks that
+  are effectively indistinguishable side by side, so the app shipped three
+  themes and offered about one and a half. neon is deliberately outside the
+  warm family — marquee magenta/cyan on violet-black.
+
+  --accent-cold is overridden here, and this is the ONLY theme that does so
+  (it is #5b7fa8 in :root and inherited everywhere else). ratingScale.ts
+  interpolates cold -> neutral -> warm, so cyan -> magenta preserves the
+  "1/10 reads cool, 10/10 reads warm" meaning and widens the gap rather than
+  breaking it. useRatingColors re-reads these from getComputedStyle on every
+  theme change (verified), so the slider follows automatically.
+
+  Contrast, measured against this theme's own --bg/--surface, all >= WCAG AA
+  4.5:1 for the small text each token actually carries.
+*/
+[data-theme='neon'] {
   color-scheme: dark;
-  /* "Wrapped" in the import — see the mapping note above. */
-  --bg: #1c0f0b;
-  --surface: #26160f;
-  --surface-2: #33201a;
-  --border: #4a2e22;
-  --text: #fbefe3;
-  --muted: #b29a86;
-  /* cinema never declared --muted-subtle, so it inherited nightcap's value
-     from :root by accident. Declared explicitly and tuned for this theme's
-     near-black base, at 4.87:1 on --bg. */
-  --muted-subtle: #8e8070;
-  --accent-warm: #e8c87a;
-  --hero: #e0562f;
-  --glow: 0 0 0 1px rgb(212 162 76 / 0.55), 0 14px 48px -8px rgb(212 162 76 / 0.6);
+  --bg: #0a0616;
+  --surface: #1b1340;
+  --surface-2: #251a57;
+  --border: #3a2a66;
+  --text: #f4eeff;
+  --muted: #a99bc7;
+  --muted-subtle: #8b7dab;
+  --accent-warm: #ff3d8a;
+  --accent-cold: #3de0ff;
+  --hero: #7c2bff;
+  --danger: #ff5c5c;
+  /* Violet --hero is too dark to carry a dark label, unlike the warm themes'
+     ember. See the --hero-ink note in :root. */
+  --hero-ink: #ffffff;
+  --glow: 0 0 0 1px rgb(255 61 138 / 0.55), 0 12px 44px -8px rgb(124 43 255 / 0.65);
+  --glow-strong: 0 16px 44px -10px rgb(255 61 138 / 0.9);
+}
+
+/*
+  Re-alias the --color-* namespace inside every theme scope.
+
+  Tailwind's @theme block below maps --color-bg -> var(--bg) etc., but it
+  emits those aliases on :root ONLY. A var() is resolved against the element
+  it's declared on, so --color-bg resolves to :root's --bg once and never
+  re-resolves — meaning a nested [data-theme] element gets correct --bg /
+  --accent-warm values but Tailwind utilities like `bg-bg` and
+  `bg-accent-warm` still paint the ROOT theme's colours.
+
+  This is the real reason the Settings theme swatches all rendered
+  identically. DESIGN.md §2 diagnosed that symptom as "the two dark themes
+  are indistinguishable" — that was true and worth fixing, but it was not
+  the cause: the nested preview was broken for ANY theme, including
+  daylight, whose --bg is #ffffff and still painted near-black. Verified in
+  the browser before changing anything: the nested scopes computed the right
+  custom properties and the wrong background-color.
+
+  Repeating the aliases per-scope makes them resolve against the scoped
+  element instead. Only tokens that actually vary by theme need repeating —
+  radius/shadow/font are theme-invariant and stay in @theme alone.
+*/
+[data-theme='nightcap'],
+[data-theme='daylight'],
+[data-theme='neon'] {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-text: var(--text);
+  --color-muted: var(--muted);
+  --color-muted-subtle: var(--muted-subtle);
+  --color-accent-warm: var(--accent-warm);
+  --color-accent-cold: var(--accent-cold);
+  --color-hero: var(--hero);
+  --color-danger: var(--danger);
 }
 
 :root[data-reduced-motion='true'] {
@@ -162,7 +266,7 @@
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.4);
   --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.75);
   --shadow-glow: var(--glow);
-  --shadow-glow-2: 0 0 0 1px rgb(212 162 76 / 0.5), 0 12px 40px -8px rgb(212 162 76 / 0.45);
+  --shadow-glow-2: var(--glow-strong);
 
   /* Declared here (Tailwind's --font-* namespace) rather than in :root
      above, since a var() alias with the same name would self-reference.
@@ -274,9 +378,9 @@
    Watched, etc.) reads as the same control without repeating the same long
    className everywhere it's used. */
 .btn-hero {
-  color: var(--bg);
+  color: var(--hero-ink);
   background: linear-gradient(135deg, var(--hero) 0%, var(--accent-warm) 100%);
-  box-shadow: 0 10px 30px -10px rgb(200 68 45 / 0.8);
+  box-shadow: var(--glow);
   transition:
     transform var(--transition-fast) var(--ease-standard),
     box-shadow var(--transition-fast) var(--ease-standard),
@@ -285,7 +389,7 @@
 
 .btn-hero:hover:not(:disabled) {
   transform: translateY(-2px);
-  box-shadow: 0 16px 44px -10px rgb(212 162 76 / 0.9);
+  box-shadow: var(--glow-strong);
 }
 
 .btn-hero:active:not(:disabled) {
