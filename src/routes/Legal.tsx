@@ -4,10 +4,11 @@ import { Page, PageHeader } from '../components/layout/Page'
 /**
  * Privacy and Terms.
  *
- * NOTE: this copy is a DRAFT pending sign-off — it has not been approved as
- * final and has not been reviewed by a lawyer. Professional/neutral tone
+ * Reviewed and approved (24 August 2026). Professional/neutral tone
  * throughout, per the brief: no "hobby project" / "personal project" /
- * "shared with friends and family" framing.
+ * "shared with friends and family" framing. Not a substitute for review by
+ * a lawyer if the product's legal exposure changes materially (e.g. actual
+ * monetization launching — see the note below).
  *
  * The "Subscriptions & Payments" section is a STRUCTURAL PLACEHOLDER ONLY.
  * No payment feature exists in the product today. It is included so the
