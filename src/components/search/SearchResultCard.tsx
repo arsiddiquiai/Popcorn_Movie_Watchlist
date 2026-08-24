@@ -26,8 +26,8 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
   }
 
   return (
-    <div className="group flex flex-col gap-3">
-      <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] group-hover:shadow-[var(--shadow-glow)]">
+    <div className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-hover:shadow-[var(--shadow-glow)]">
         {posterUrl ? (
           <img src={posterUrl} alt={movie.title} loading="lazy" className="h-full w-full object-cover" />
         ) : (
@@ -59,7 +59,7 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
 function AddButton({ state, onClick }: { state: AddState; onClick: () => void }) {
   if (state === 'already') {
     return (
-      <div className="rounded-lg border border-muted/25 px-3 py-1.5 text-center font-ui text-xs text-muted">
+      <div className="rounded-lg border border-border px-3 py-1.5 text-center font-ui text-xs text-muted">
         Already on your list
       </div>
     )
@@ -78,7 +78,7 @@ function AddButton({ state, onClick }: { state: AddState; onClick: () => void })
       <button
         type="button"
         onClick={onClick}
-        className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-3 py-1.5 font-ui text-xs text-accent-cold transition-colors duration-[var(--transition-fast)]"
+        className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-3 py-1.5 font-ui text-xs text-accent-cold transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)]"
       >
         Couldn't add — retry
       </button>

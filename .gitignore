@@ -41,3 +41,7 @@ PW file for popcorn project.txt
 backup-*.json
 
 supabase/.temp/
+
+# Local before/after screenshot captures from visual review passes
+_before/
+_after/

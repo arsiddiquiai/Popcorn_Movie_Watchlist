@@ -138,24 +138,31 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
         )}
 
         {rescueEligible && (
-          <div className="absolute inset-x-0 bottom-0 flex flex-col gap-2 bg-bg/90 px-3 py-2.5 backdrop-blur-sm">
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-ui text-xs leading-snug text-text">Still want to watch this?</p>
-              <button
-                type="button"
-                onClick={handleDismiss}
-                aria-label="Dismiss"
-                className="shrink-0 font-ui text-xs leading-none text-muted-subtle hover:text-text"
-              >
-                ×
-              </button>
-            </div>
-            <div className="flex gap-2">
+          // A full-height gradient scrim rather than the hard-edged strip this
+          // used to be: a solid box pasted across the poster's bottom third was
+          // the roughest element on the watchlist. The gradient lets it read as
+          // part of the poster, and gives the copy enough room to sit at a
+          // legible size instead of 11px.
+          <div className="absolute inset-0 flex flex-col justify-end gap-3 bg-gradient-to-t from-bg via-bg/85 via-45% to-transparent p-4">
+            <button
+              type="button"
+              onClick={handleDismiss}
+              aria-label="Not now"
+              className="absolute right-2 top-2 grid h-7 w-7 place-items-center rounded-full text-lg leading-none text-muted-subtle transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-surface hover:text-text"
+            >
+              ×
+            </button>
+
+            <p className="font-display text-sm leading-snug font-semibold text-text">
+              Still want to watch this?
+            </p>
+
+            <div className="flex flex-col gap-2">
               <button
                 type="button"
                 onClick={(e) => void handleKeep(e)}
                 disabled={pending}
-                className="flex-1 rounded-full border border-accent-warm/50 bg-accent-warm/15 px-2 py-1 font-ui text-[11px] font-semibold text-accent-warm transition-colors duration-[var(--transition-fast)] hover:bg-accent-warm/25 disabled:opacity-60"
+                className="w-full rounded-full border border-accent-warm/50 bg-accent-warm/15 px-3 py-2 font-ui text-xs font-semibold text-accent-warm transition-[background-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/25 active:scale-[0.97] disabled:opacity-60"
               >
                 Keep it
               </button>
@@ -163,7 +170,7 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
                 type="button"
                 onClick={(e) => void handleRemove(e)}
                 disabled={pending}
-                className="flex-1 rounded-full border border-border px-2 py-1 font-ui text-[11px] text-muted transition-colors duration-[var(--transition-fast)] hover:text-text disabled:opacity-60"
+                className="w-full rounded-full border border-border px-3 py-2 font-ui text-xs text-muted transition-[color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 hover:text-text active:scale-[0.97] disabled:opacity-60"
               >
                 Remove
               </button>
@@ -174,7 +181,7 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
 
       <div className="flex flex-col gap-1">
         <h3
-          className={`truncate font-display text-base font-semibold transition-colors duration-[var(--transition-base)] ${decayed ? 'text-muted' : 'text-text'}`}
+          className={`truncate font-display text-base font-semibold transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${decayed ? 'text-muted' : 'text-text'}`}
           title={movie.title}
         >
           {movie.title}

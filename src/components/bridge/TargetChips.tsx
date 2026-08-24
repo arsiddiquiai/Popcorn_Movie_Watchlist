@@ -32,7 +32,7 @@ export function TargetChips({ value, onChange }: TargetChipsProps) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(target)}
-            className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ${
+            className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
               active
                 ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
                 : 'border-border text-muted hover:text-text'

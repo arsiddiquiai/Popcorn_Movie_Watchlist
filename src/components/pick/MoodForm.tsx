@@ -49,14 +49,14 @@ export function MoodForm({ value, onChange, onSubmit, disabled }: MoodFormProps)
           rows={3}
           maxLength={500}
           placeholder="Wrung out from work, want something that doesn't ask much of me…"
-          className="w-full resize-none rounded-xl border border-muted/25 bg-surface px-4 py-3 font-ui text-base leading-relaxed text-text outline-none transition-colors duration-[var(--transition-fast)] placeholder:text-muted/70 focus:border-accent-warm"
+          className="w-full resize-none rounded-xl border border-border bg-surface px-4 py-3 font-ui text-base leading-relaxed text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted/70 focus:border-accent-warm"
         />
       </div>
 
       <EnergySelector value={value.energy_level} onChange={(energy_level) => onChange({ ...value, energy_level })} />
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 font-ui text-sm font-semibold text-text">Time you've got</legend>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 font-display text-xs font-semibold tracking-[0.14em] text-muted uppercase">Time you've got</legend>
         <div className="flex flex-wrap gap-2">
           {MINUTE_PRESETS.map((minutes) => {
             const active = value.minutes_available === minutes
@@ -67,10 +67,10 @@ export function MoodForm({ value, onChange, onSubmit, disabled }: MoodFormProps)
                 type="button"
                 aria-pressed={active}
                 onClick={() => onChange({ ...value, minutes_available: minutes })}
-                className={`rounded-full border px-4 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                className={`rounded-full border px-4 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                   active
                     ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
-                    : 'border-muted/25 text-muted hover:text-text'
+                    : 'border-border text-muted hover:text-text'
                 }`}
               >
                 {label} min
@@ -80,8 +80,8 @@ export function MoodForm({ value, onChange, onSubmit, disabled }: MoodFormProps)
         </div>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="mb-1 font-ui text-sm font-semibold text-text">Watching with</legend>
+      <fieldset className="flex flex-col gap-3">
+        <legend className="mb-1 font-display text-xs font-semibold tracking-[0.14em] text-muted uppercase">Watching with</legend>
         <div className="flex flex-wrap gap-2">
           {COMPANY_OPTIONS.map((option) => {
             const active = value.company === option.value
@@ -91,10 +91,10 @@ export function MoodForm({ value, onChange, onSubmit, disabled }: MoodFormProps)
                 type="button"
                 aria-pressed={active}
                 onClick={() => onChange({ ...value, company: option.value })}
-                className={`rounded-full border px-4 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                className={`rounded-full border px-4 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                   active
                     ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
-                    : 'border-muted/25 text-muted hover:text-text'
+                    : 'border-border text-muted hover:text-text'
                 }`}
               >
                 {option.label}

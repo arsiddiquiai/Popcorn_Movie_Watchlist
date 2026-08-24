@@ -20,8 +20,8 @@ export function EnergySelector({ value, onChange }: EnergySelectorProps) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
-        <span className="font-ui text-sm font-semibold text-text">Energy</span>
-        <span className="font-ui text-xs text-muted">{ENERGY_LABELS[value]}</span>
+        <span className="font-display text-xs font-semibold tracking-[0.14em] text-muted uppercase">Energy</span>
+        <span className="font-ui text-sm font-semibold text-accent-warm">{ENERGY_LABELS[value]}</span>
       </div>
 
       <div
@@ -43,7 +43,7 @@ export function EnergySelector({ value, onChange }: EnergySelectorProps) {
           const isCurrent = level === value
           // Bars rise left to right, so the control reads as a level being
           // stepped up rather than a position on a scale.
-          const heightClass = ['h-8', 'h-11', 'h-14', 'h-17', 'h-20'][level - 1]
+          const heightClass = ['h-9', 'h-12', 'h-15', 'h-18', 'h-21'][level - 1]
 
           return (
             <button
@@ -54,11 +54,17 @@ export function EnergySelector({ value, onChange }: EnergySelectorProps) {
               aria-label={`${level} — ${ENERGY_LABELS[level]}`}
               tabIndex={isCurrent ? 0 : -1}
               onClick={() => onChange(level)}
-              className={`${heightClass} flex-1 rounded-lg border transition-[background-color,border-color,transform] duration-[var(--transition-base)] ${
+              // rounded-sm, not rounded-lg: the theme scale maps lg to 20px,
+              // which on a 36px-tall bar renders as a pill while the 84px bar
+              // reads as a rounded box — five bars, five apparent shapes. A
+              // small fixed radius keeps the geometry consistent across the set.
+              // origin-bottom so the current bar grows upward from its baseline
+              // instead of expanding through the row's bottom edge.
+              className={`${heightClass} flex-1 origin-bottom rounded-sm border transition-[background-color,border-color,transform] duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
                 active
-                  ? 'border-accent-warm bg-accent-warm/80'
-                  : 'border-muted/25 bg-muted/10 hover:border-muted/40'
-              } ${isCurrent ? 'scale-y-105' : ''}`}
+                  ? 'border-accent-warm bg-accent-warm/85'
+                  : 'border-border bg-surface-2 hover:border-muted/40'
+              } ${isCurrent ? 'scale-y-[1.06]' : ''}`}
             />
           )
         })}

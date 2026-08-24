@@ -70,7 +70,7 @@ export default function TasteDNA() {
           <button
             type="button"
             onClick={() => void load()}
-            className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg"
+            className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
           >
             Try again
           </button>
@@ -90,7 +90,7 @@ export default function TasteDNA() {
         </p>
         <Link
           to="/"
-          className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] hover:opacity-90"
+          className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
         >
           Back to watchlist
         </Link>
@@ -102,7 +102,7 @@ export default function TasteDNA() {
   const decadeData = result.decade_breakdown
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-12">
+    <div className="mx-auto flex w-full max-w-4xl flex-col gap-10 px-6 py-10 sm:px-10 sm:py-14">
       <header className="flex flex-col gap-2">
         <span className="font-mono text-xs uppercase tracking-widest text-accent-warm">
           {result.total_rated} films rated
@@ -116,7 +116,7 @@ export default function TasteDNA() {
       </header>
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-lg border border-border bg-surface p-5">
           <h2 className="mb-4 font-ui text-sm font-semibold text-text">Genres</h2>
           <ResponsiveContainer width="100%" height={Math.max(180, genreData.length * 34)}>
             <BarChart data={genreData} layout="vertical" margin={{ left: 8, right: 16, top: 4, bottom: 4 }}>
@@ -140,7 +140,7 @@ export default function TasteDNA() {
           </ResponsiveContainer>
         </section>
 
-        <section className="rounded-2xl border border-border bg-surface p-5">
+        <section className="rounded-lg border border-border bg-surface p-5">
           <h2 className="mb-4 font-ui text-sm font-semibold text-text">Decades</h2>
           <ResponsiveContainer width="100%" height={Math.max(180, 220)}>
             <BarChart data={decadeData} margin={{ left: -16, right: 8, top: 4, bottom: 4 }}>
@@ -159,7 +159,7 @@ export default function TasteDNA() {
       </div>
 
       {result.avg_runtime_minutes && (
-        <section className="flex items-center gap-4 rounded-2xl border border-border bg-surface p-5">
+        <section className="flex items-center gap-4 rounded-lg border border-border bg-surface p-5">
           <span className="font-display text-3xl text-accent-warm">{result.avg_runtime_minutes}</span>
           <span className="font-ui text-sm text-muted">average minutes per film you've rated</span>
         </section>
@@ -176,7 +176,7 @@ export default function TasteDNA() {
               <Link
                 key={spot.tmdb_id}
                 to={`/movie/${spot.tmdb_id}`}
-                className="flex flex-col gap-2 rounded-2xl border border-border bg-surface p-4 transition-colors duration-[var(--transition-fast)] hover:border-accent-warm/40"
+                className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40"
               >
                 <span className="font-mono text-[11px] uppercase tracking-wide text-accent-warm">{spot.genre}</span>
                 <span className="font-display text-base font-semibold text-text">{spot.title}</span>

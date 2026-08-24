@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { Section } from '../components/layout/Page'
 import { RatingPanel } from '../components/rating/RatingPanel'
 import { ReactivePoster, type PosterRelease } from '../components/rating/ReactivePoster'
 import { WatchProviders } from '../components/movie/WatchProviders'
@@ -143,7 +144,7 @@ export default function MovieDetail() {
           <button
             type="button"
             onClick={() => setRetryKey((k) => k + 1)}
-            className="rounded-lg border border-muted/25 px-4 py-2 font-ui text-sm text-text"
+            className="rounded-lg border border-border px-4 py-2 font-ui text-sm text-text"
           >
             Retry
           </button>
@@ -161,57 +162,83 @@ export default function MovieDetail() {
 
   return (
     <div className="flex min-h-screen flex-col">
-      {backdropUrl && (
-        <div className="aspect-[21/9] w-full overflow-hidden bg-surface">
-          <img src={backdropUrl} alt="" className="h-full w-full object-cover" />
-        </div>
-      )}
+      {/* Hero. The backdrop used to hard-cut into the page background, reading
+          as two unrelated blocks stacked on each other. It now fades into --bg
+          through a scrim, and the poster and title overlap that fade — the
+          poster-forward treatment CLAUDE.md asks for, and what makes this read
+          as a film page rather than a form. */}
+      <header className="relative">
+        {backdropUrl ? (
+          <div className="relative aspect-[21/9] max-h-[52vh] w-full overflow-hidden bg-surface">
+            <img src={backdropUrl} alt="" className="h-full w-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/70 to-bg/10" />
+            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-bg to-transparent" />
+          </div>
+        ) : (
+          <div className="h-28 w-full bg-surface" />
+        )}
 
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-8 md:flex-row">
-        <ReactivePoster
-          posterUrl={posterUrl}
-          title={movie.title}
-          score={liveScore}
-          release={release}
-          reducedMotion={reducedMotion}
-        />
+        <div className="mx-auto w-full max-w-5xl px-6 sm:px-10">
+          <div className="-mt-24 flex flex-col gap-6 md:-mt-32 md:flex-row md:items-end">
+            <ReactivePoster
+              posterUrl={posterUrl}
+              title={movie.title}
+              score={liveScore}
+              release={release}
+              reducedMotion={reducedMotion}
+            />
 
-        <div className="flex flex-1 flex-col gap-4">
-          <div>
-            <h1 className="font-display text-3xl text-text">{movie.title}</h1>
-            <div className="mt-1 flex items-center gap-2 font-ui text-sm text-muted">
-              <span>{movie.release_year ?? '—'}</span>
-              {runtime && (
-                <>
-                  <span aria-hidden="true">·</span>
-                  <span>{runtime}</span>
-                </>
+            <div className="flex min-w-0 flex-1 flex-col gap-3 pb-1">
+              <h1 className="font-display text-4xl leading-[1.05] font-bold tracking-tight text-text sm:text-5xl">
+                {movie.title}
+              </h1>
+
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-xs tracking-wide text-muted uppercase">
+                <span>{movie.release_year ?? '—'}</span>
+                {runtime && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span>{runtime}</span>
+                  </>
+                )}
+                {typeof movie.tmdb_rating === 'number' && movie.tmdb_rating > 0 && (
+                  <>
+                    <span aria-hidden="true">·</span>
+                    <span className="text-accent-warm">TMDB {movie.tmdb_rating.toFixed(1)}</span>
+                  </>
+                )}
+              </div>
+
+              {movie.genres && movie.genres.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {movie.genres.map((genre) => (
+                    <span
+                      key={genre}
+                      className="rounded-full border border-border bg-surface/70 px-3 py-1 font-ui text-xs text-muted backdrop-blur-sm"
+                    >
+                      {genre}
+                    </span>
+                  ))}
+                </div>
               )}
             </div>
           </div>
+        </div>
+      </header>
 
-          {movie.genres && movie.genres.length > 0 && (
-            <div className="flex flex-wrap gap-2">
-              {movie.genres.map((genre) => (
-                <span
-                  key={genre}
-                  className="rounded-full border border-muted/25 px-3 py-1 font-ui text-xs text-muted"
-                >
-                  {genre}
-                </span>
-              ))}
-            </div>
-          )}
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-10 px-6 py-10 sm:px-10 sm:py-14">
+        {movie.overview && (
+          <p className="max-w-prose font-ui text-base leading-relaxed text-text">{movie.overview}</p>
+        )}
 
-          {movie.overview && <p className="font-ui text-sm leading-relaxed text-text">{movie.overview}</p>}
-
+        <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
             {(!watchlistItem || watchlistItem.status === 'dropped') && (
               <button
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(async () => void (await addToWatchlist(tmdbId, user!.id)))}
-                className="btn-hero rounded-full px-5 py-2.5 font-ui text-sm font-semibold"
+                className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
               >
                 Add to Watchlist
               </button>
@@ -222,7 +249,7 @@ export default function MovieDetail() {
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(() => markAsWatched(watchlistItem.id))}
-                className="btn-hero rounded-full px-5 py-2.5 font-ui text-sm font-semibold"
+                className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
               >
                 Mark as Watched
               </button>
@@ -233,45 +260,47 @@ export default function MovieDetail() {
                 type="button"
                 disabled={actionPending}
                 onClick={() => runAction(() => removeFromWatchlist(watchlistItem.id))}
-                className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-5 py-2.5 font-ui text-sm text-accent-cold transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="rounded-full border border-accent-cold/40 bg-accent-cold/10 px-6 py-3 font-ui text-sm text-accent-cold transition-[background-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-cold/20 active:scale-[0.97] disabled:opacity-60"
               >
                 Remove from list
               </button>
             )}
-          </div>
 
-          {actionError && <p className="font-ui text-xs text-accent-cold">{actionError}</p>}
-
-          {watchlistItem?.status === 'watched' && user && (
-            <RatingPanel
-              tmdbId={tmdbId}
-              userId={user.id}
-              existingRating={rating}
-              onScoreChange={setLiveScore}
-              onRelease={(score) =>
-                setRelease((prev) => ({ effect: releaseEffectFor(score), token: prev.token + 1 }))
-              }
-              onRatingSaved={setRating}
-            />
-          )}
-
-          {rating && (
-            <div className="flex items-center gap-3">
+            {rating && (
               <button
                 type="button"
                 onClick={() => void handleShare()}
-                className="flex items-center gap-2 rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] hover:border-accent-warm/40"
+                className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 active:scale-[0.97]"
               >
                 Share rating
               </button>
-              {shareMessage && <span className="font-ui text-xs text-muted">{shareMessage}</span>}
-            </div>
-          )}
+            )}
+            {shareMessage && <span className="font-ui text-xs text-muted">{shareMessage}</span>}
+          </div>
 
+          {actionError && <p className="font-ui text-xs text-accent-cold">{actionError}</p>}
+        </div>
+
+        {watchlistItem?.status === 'watched' && user && (
+          <RatingPanel
+            tmdbId={tmdbId}
+            userId={user.id}
+            existingRating={rating}
+            onScoreChange={setLiveScore}
+            onRelease={(score) =>
+              setRelease((prev) => ({ effect: releaseEffectFor(score), token: prev.token + 1 }))
+            }
+            onRatingSaved={setRating}
+          />
+        )}
+
+        {/* Trailer and cast sit side by side on wide screens. Previously every
+            one of these blocks was trapped in the narrow column beside the
+            poster, leaving a tall empty gutter underneath it. */}
+        <div className={`grid gap-10 ${movie.trailer_key && topCast.length > 0 ? 'lg:grid-cols-[1.6fr_1fr]' : ''}`}>
           {movie.trailer_key && (
-            <div className="flex flex-col gap-2">
-              <h2 className="font-ui text-sm font-semibold text-text">Trailer</h2>
-              <div className="aspect-video w-full overflow-hidden rounded-xl bg-surface">
+            <Section title="Trailer">
+              <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-surface">
                 <iframe
                   src={`https://www.youtube.com/embed/${movie.trailer_key}`}
                   title={`${movie.title} trailer`}
@@ -280,29 +309,24 @@ export default function MovieDetail() {
                   className="h-full w-full"
                 />
               </div>
-            </div>
+            </Section>
           )}
 
-          {/* Watch providers sit directly below the trailer when there is
-              one — otherwise below cast instead, in the branch below. */}
-          {movie.trailer_key && <WatchProviders tmdbId={tmdbId} />}
-
           {topCast.length > 0 && (
-            <div className="flex flex-col gap-2">
-              <h2 className="font-ui text-sm font-semibold text-text">Cast</h2>
-              <ul className="flex flex-col gap-1">
+            <Section title="Cast">
+              <ul className="flex flex-col gap-2.5">
                 {topCast.map((member, index) => (
-                  <li key={index} className="font-ui text-sm text-muted">
+                  <li key={index} className="font-ui text-sm leading-snug">
                     <span className="text-text">{member.name}</span>
-                    {member.character && <span> as {member.character}</span>}
+                    {member.character && <span className="text-muted"> as {member.character}</span>}
                   </li>
                 ))}
               </ul>
-            </div>
+            </Section>
           )}
-
-          {!movie.trailer_key && <WatchProviders tmdbId={tmdbId} />}
         </div>
+
+        <WatchProviders tmdbId={tmdbId} />
       </div>
     </div>
   )

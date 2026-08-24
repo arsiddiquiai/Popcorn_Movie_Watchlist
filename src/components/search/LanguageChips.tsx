@@ -33,10 +33,10 @@ export function LanguageChips({ value, onChange }: LanguageChipsProps) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(lang.code)}
-            className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ${
+            className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
               active
                 ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
-                : 'border-muted/25 text-muted hover:text-text'
+                : 'border-border text-muted hover:text-text'
             }`}
           >
             {lang.label}

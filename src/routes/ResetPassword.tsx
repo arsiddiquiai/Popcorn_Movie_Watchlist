@@ -65,7 +65,7 @@ export default function ResetPassword() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
-      <div className="w-full max-w-sm rounded-2xl border border-muted/20 bg-surface p-8">
+      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8">
         <div className="mb-8 flex justify-center">
           <Logo />
         </div>
@@ -83,7 +83,7 @@ export default function ResetPassword() {
             </p>
             <Link
               to="/auth"
-              className="rounded-lg bg-accent-warm px-4 py-2 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] hover:opacity-90"
+              className="rounded-lg bg-accent-warm px-4 py-2 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:opacity-90"
             >
               Back to log in
             </Link>
@@ -104,7 +104,7 @@ export default function ResetPassword() {
                   autoComplete="new-password"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
-                  className="rounded-lg border border-muted/25 bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
+                  className="rounded-lg border border-border bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
                 />
               </div>
 
@@ -118,7 +118,7 @@ export default function ResetPassword() {
                   autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="rounded-lg border border-muted/25 bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
+                  className="rounded-lg border border-border bg-bg px-3 py-2 font-ui text-sm text-text outline-none focus:border-accent-warm"
                 />
                 {fieldError && <p className="font-ui text-xs text-accent-cold">{fieldError}</p>}
               </div>
@@ -128,7 +128,7 @@ export default function ResetPassword() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-2 rounded-lg bg-accent-warm px-4 py-2.5 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] disabled:opacity-60"
+                className="mt-2 rounded-lg bg-accent-warm px-4 py-2.5 font-ui text-sm font-semibold text-bg transition-opacity duration-[var(--transition-fast)] ease-[var(--ease-standard)] disabled:opacity-60"
               >
                 {submitting ? 'Saving…' : 'Save new password'}
               </button>

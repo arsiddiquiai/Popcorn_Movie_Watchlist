@@ -22,7 +22,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-bg text-text md:flex-row">
-      <header className="flex items-center justify-between border-b border-muted/15 bg-surface px-4 py-3 md:hidden">
+      <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
         <Logo />
         <button
           type="button"

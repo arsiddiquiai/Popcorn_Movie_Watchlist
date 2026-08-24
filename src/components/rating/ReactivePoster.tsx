@@ -53,7 +53,7 @@ export function ReactivePoster({ posterUrl, title, score, release, reducedMotion
         aria-hidden="true"
         animate={glowControls}
         style={{ background: 'var(--accent-warm)', opacity: reaction.glowOpacity * 0.55 }}
-        className="pointer-events-none absolute -inset-3 rounded-[2rem] blur-2xl transition-opacity duration-[var(--transition-base)]"
+        className="pointer-events-none absolute -inset-3 rounded-[2rem] blur-2xl transition-opacity duration-[var(--transition-base)] ease-[var(--ease-standard)]"
       />
 
       {/* Release animations live on their own wrapper so they compose with

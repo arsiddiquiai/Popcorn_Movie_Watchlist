@@ -55,7 +55,10 @@
   --border: #3a2e29;
   --text: #f2e9de;
   --muted: #a89a8c;
-  --muted-subtle: #857767;
+  /* Raised from #857767 (4.28:1 on --bg) to clear WCAG AA 4.5:1 — this
+     token carries small 11px mono meta text (year - runtime, provider
+     labels), which is exactly where sub-AA contrast is least forgiving. */
+  --muted-subtle: #908272;
   --accent-warm: #d4a24c;
   --accent-cold: #5b7fa8;
   /* Plain (unprefixed) names, aliased into Tailwind's --color- / --shadow-
@@ -90,7 +93,8 @@
   --border: #e0d5c8;
   --text: #1b1513;
   --muted: #6e6155;
-  --muted-subtle: #93857a;
+  /* Was #93857a (3.35:1 on --bg) — the worst of the three. */
+  --muted-subtle: #7d6f64;
   /* Deepened for AA on warm white — the import's own daylight delta. */
   --accent-warm: #8a6320;
   --hero: #a33520;
@@ -106,6 +110,10 @@
   --border: #4a2e22;
   --text: #fbefe3;
   --muted: #b29a86;
+  /* cinema never declared --muted-subtle, so it inherited nightcap's value
+     from :root by accident. Declared explicitly and tuned for this theme's
+     near-black base, at 4.87:1 on --bg. */
+  --muted-subtle: #8e8070;
   --accent-warm: #e8c87a;
   --hero: #e0562f;
   --glow: 0 0 0 1px rgb(212 162 76 / 0.55), 0 14px 48px -8px rgb(212 162 76 / 0.6);

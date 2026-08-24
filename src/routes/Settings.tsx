@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../auth/AuthProvider'
+import { Page, PageHeader, Section } from '../components/layout/Page'
 import { downloadWatchlistCsv } from '../lib/exportData'
 import { useTheme } from '../theme/ThemeProvider'
 import type { Theme } from '../theme/types'
@@ -29,13 +30,10 @@ export default function Settings() {
   }
 
   return (
-    <div className="mx-auto flex max-w-2xl flex-col gap-10 px-6 py-12">
-      <header>
-        <h1 className="font-display text-3xl text-text">Settings</h1>
-      </header>
+    <Page>
+      <PageHeader title="Settings" subtitle="Appearance, motion, and your data." />
 
-      <section className="flex flex-col gap-4">
-        <h2 className="font-display text-xs uppercase tracking-wider text-muted">Theme</h2>
+      <Section title="Theme">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {themeOptions.map((option) => {
             const isActive = theme === option.id
@@ -45,8 +43,8 @@ export default function Settings() {
                 type="button"
                 onClick={() => setTheme(option.id)}
                 aria-pressed={isActive}
-                className={`flex flex-col items-start gap-3 rounded-xl border px-4 py-4 text-left transition-colors duration-[var(--transition-base)] ${
-                  isActive ? 'border-accent-warm bg-accent-warm/10' : 'border-muted/20 bg-surface hover:border-muted/40'
+                className={`flex flex-col items-start gap-3 rounded-xl border px-4 py-4 text-left transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
+                  isActive ? 'border-accent-warm bg-accent-warm/10' : 'border-border bg-surface hover:border-muted/40'
                 }`}
               >
                 {/* Nested data-theme locally overrides the CSS variables
@@ -55,7 +53,7 @@ export default function Settings() {
                 <span
                   data-theme={option.id}
                   aria-hidden="true"
-                  className="flex h-8 w-14 overflow-hidden rounded-md border border-muted/30"
+                  className="flex h-8 w-14 overflow-hidden rounded-md border border-border"
                 >
                   <span className="h-full w-1/2 bg-bg" />
                   <span className="h-full w-1/2 bg-accent-warm" />
@@ -66,35 +64,38 @@ export default function Settings() {
             )
           })}
         </div>
-      </section>
+      </Section>
 
-      <section className="flex items-center justify-between gap-4 rounded-xl border border-muted/20 bg-surface px-4 py-4">
+      <Section title="Motion">
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-border bg-surface px-5 py-4">
         <div>
-          <h2 className="font-ui text-sm font-semibold text-text">Reduced motion</h2>
-          <p className="font-ui text-xs text-muted">Minimises animation and transition speed everywhere.</p>
+          <h3 className="font-ui text-sm font-semibold text-text">Reduced motion</h3>
+          <p className="mt-1 font-ui text-xs leading-relaxed text-muted">Minimises animation and transition speed everywhere.</p>
         </div>
         <button
           type="button"
           role="switch"
           aria-checked={reducedMotion}
           onClick={() => setReducedMotion(!reducedMotion)}
-          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-[var(--transition-base)] ${
+          className={`relative h-7 w-12 shrink-0 rounded-full transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
             reducedMotion ? 'bg-accent-warm' : 'bg-muted/30'
           }`}
         >
           <span
-            className={`absolute top-1 h-5 w-5 rounded-full bg-bg transition-[left] duration-[var(--transition-base)] ${
+            className={`absolute top-1 h-5 w-5 rounded-full bg-bg transition-[left] duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
               reducedMotion ? 'left-6' : 'left-1'
             }`}
           />
         </button>
-      </section>
+      </div>
+      </Section>
 
-      <section className="flex flex-col gap-2 rounded-xl border border-muted/20 bg-surface px-4 py-4">
+      <Section title="Your data">
+      <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface px-5 py-4">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h2 className="font-ui text-sm font-semibold text-text">Export your data</h2>
-            <p className="font-ui text-xs text-muted">
+            <h3 className="font-ui text-sm font-semibold text-text">Export your data</h3>
+            <p className="mt-1 font-ui text-xs leading-relaxed text-muted">
               Download your watchlist as a CSV — title, status, dates, ratings, and notes.
             </p>
           </div>
@@ -102,7 +103,7 @@ export default function Settings() {
             type="button"
             onClick={() => void handleExport()}
             disabled={exportState === 'exporting'}
-            className="shrink-0 rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] hover:border-accent-warm/40 disabled:opacity-60"
+            className="shrink-0 rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 disabled:opacity-60"
           >
             {exportState === 'exporting' ? 'Exporting…' : 'Export CSV'}
           </button>
@@ -110,13 +111,14 @@ export default function Settings() {
         {exportState === 'error' && (
           <p className="font-ui text-xs text-accent-cold">Couldn't export your data. Try again.</p>
         )}
-      </section>
+      </div>
+      </Section>
 
-      <footer className="border-t border-muted/15 pt-6">
+      <footer className="border-t border-border pt-6">
         <p className="font-ui text-xs text-muted">
           This product uses the TMDB API but is not endorsed or certified by TMDB.
         </p>
       </footer>
-    </div>
+    </Page>
   )
 }

@@ -20,10 +20,10 @@ export function WhyChips({ selected, onToggle, disabled }: WhyChipsProps) {
               aria-pressed={isSelected}
               disabled={disabled}
               onClick={() => onToggle(tag)}
-              className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] disabled:opacity-50 ${
+              className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] disabled:opacity-50 ${
                 isSelected
                   ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
-                  : 'border-muted/25 text-muted hover:text-text'
+                  : 'border-border text-muted hover:text-text'
               }`}
             >
               {tag}

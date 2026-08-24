@@ -42,13 +42,13 @@ const accentStyles: Record<Accent, { bar: string; panelActive: string; panelInac
   'accent-cold': {
     bar: 'bg-accent-cold',
     panelActive: 'border-accent-cold bg-accent-cold/10',
-    panelInactive: 'border-muted/15 bg-transparent',
+    panelInactive: 'border-border bg-transparent',
     label: 'text-accent-cold',
   },
   'accent-warm': {
     bar: 'bg-accent-warm',
     panelActive: 'border-accent-warm bg-accent-warm/10',
-    panelInactive: 'border-muted/15 bg-transparent',
+    panelInactive: 'border-border bg-transparent',
     label: 'text-accent-warm',
   },
 }
@@ -84,9 +84,9 @@ export function Nav({ onNavigate }: NavProps = {}) {
   const activeGroup = groups.find((group) => isGroupActive(group, pathname))
 
   return (
-    <nav className="flex h-full w-64 shrink-0 flex-col gap-6 border-r border-muted/15 bg-surface px-5 py-6">
+    <nav className="flex h-full w-64 shrink-0 flex-col gap-6 border-r border-border bg-surface px-5 py-6">
       <div
-        className={`h-1 w-10 rounded-full transition-colors duration-[var(--transition-base)] ${
+        className={`h-1 w-10 rounded-full transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
           activeGroup ? accentStyles[activeGroup.accent].bar : 'bg-muted/30'
         }`}
         aria-hidden="true"
@@ -103,7 +103,7 @@ export function Nav({ onNavigate }: NavProps = {}) {
             <section
               key={group.label}
               aria-label={group.label}
-              className={`rounded-xl border px-3 py-3 transition-colors duration-[var(--transition-base)] ${
+              className={`rounded-xl border px-3 py-3 transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${
                 active ? styles.panelActive : styles.panelInactive
               }`}
             >
@@ -118,7 +118,7 @@ export function Nav({ onNavigate }: NavProps = {}) {
                       end={item.to === '/'}
                       onClick={onNavigate}
                       className={({ isActive }) =>
-                        `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                        `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                           isActive ? 'bg-bg font-semibold text-text' : 'text-muted hover:text-text'
                         }`
                       }
@@ -133,14 +133,14 @@ export function Nav({ onNavigate }: NavProps = {}) {
         })}
       </div>
 
-      <ul className="flex flex-col gap-1 border-t border-muted/15 pt-4">
+      <ul className="flex flex-col gap-1 border-t border-border pt-4">
         {moreLinks.map((item) => (
           <li key={item.to}>
             <NavLink
               to={item.to}
               onClick={onNavigate}
               className={({ isActive }) =>
-                `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ${
+                `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                   isActive ? 'text-text font-semibold' : 'text-muted hover:text-text'
                 }`
               }
@@ -152,14 +152,14 @@ export function Nav({ onNavigate }: NavProps = {}) {
       </ul>
 
       {user && (
-        <div className="flex items-center justify-between gap-2 border-t border-muted/15 pt-4">
+        <div className="flex items-center justify-between gap-2 border-t border-border pt-4">
           <span className="min-w-0 truncate font-ui text-xs text-muted" title={user.email ?? undefined}>
             {user.email}
           </span>
           <button
             type="button"
             onClick={() => void signOut()}
-            className="shrink-0 rounded-lg px-2 py-1 font-ui text-xs text-muted transition-colors duration-[var(--transition-fast)] hover:text-text"
+            className="shrink-0 rounded-lg px-2 py-1 font-ui text-xs text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text"
           >
             Log out
           </button>

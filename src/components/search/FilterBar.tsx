@@ -36,7 +36,7 @@ const SORT_OPTIONS: { value: DiscoverSort; label: string }[] = [
 ]
 
 const inputClass =
-  'w-24 rounded-lg border border-muted/25 bg-bg px-2.5 py-1.5 font-ui text-sm text-text outline-none focus:border-accent-cold disabled:opacity-50'
+  'w-24 rounded-lg border border-border bg-bg px-2.5 py-1.5 font-ui text-sm text-text outline-none focus:border-accent-cold disabled:opacity-50'
 
 interface FilterBarProps {
   filters: AdvancedFilters
@@ -98,7 +98,7 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
   const isActive = hasActiveAdvancedFilters(filters)
 
   const panel = (
-    <div className="flex flex-col gap-4 border-t border-muted/15 pt-4">
+    <div className="flex flex-col gap-4 border-t border-border pt-4">
       {disabled && (
         <p className="font-ui text-xs text-muted">Clear your search to use these filters — they don't apply to text search.</p>
       )}
@@ -133,10 +133,10 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
                 aria-pressed={active}
                 disabled={disabled}
                 onClick={() => toggleGenre(genre.id)}
-                className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] disabled:opacity-50 ${
+                className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] disabled:opacity-50 ${
                   active
                     ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
-                    : 'border-muted/25 text-muted hover:text-text'
+                    : 'border-border text-muted hover:text-text'
                 }`}
               >
                 {genre.name}
@@ -225,8 +225,8 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
-        className={`inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ${
-          isActive ? 'border-accent-warm text-accent-warm' : 'border-muted/25 text-muted hover:text-text'
+        className={`inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
+          isActive ? 'border-accent-warm text-accent-warm' : 'border-border text-muted hover:text-text'
         }`}
       >
         Filters{isActive ? ` · ${filters.genreIds.length + [filters.yearFrom, filters.yearTo, filters.minRating].filter((v) => v !== null).length + (filters.sortBy !== 'popularity.desc' ? 1 : 0)}` : ''}

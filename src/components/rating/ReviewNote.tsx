@@ -32,7 +32,7 @@ export function ReviewNote({ ratingId, initialText }: ReviewNoteProps) {
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="self-start font-ui text-xs text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] hover:text-text"
+        className="self-start font-ui text-xs text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text"
       >
         Add a note (optional)
       </button>
@@ -55,7 +55,7 @@ export function ReviewNote({ ratingId, initialText }: ReviewNoteProps) {
         rows={3}
         maxLength={2000}
         placeholder="What stuck with you about it?"
-        className="w-full resize-none rounded-lg border border-border bg-bg/40 px-3 py-2 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] placeholder:text-muted-subtle focus:border-accent-warm"
+        className="w-full resize-none rounded-lg border border-border bg-bg/40 px-3 py-2 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted-subtle focus:border-accent-warm"
       />
       <span className="font-ui text-[11px] text-muted-subtle">
         {saveState === 'saving' && 'Saving…'}

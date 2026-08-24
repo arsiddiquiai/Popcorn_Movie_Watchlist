@@ -136,11 +136,11 @@ export function RatingPanel({
       initial={playEntrance ? { opacity: 0, y: 12 } : false}
       /* select-none: dragging the thumb otherwise highlights the verdict
          word and score text as though selecting them. */
-      className="relative isolate flex select-none flex-col gap-4 overflow-hidden rounded-2xl border border-muted/20 bg-surface p-5"
+      className="relative isolate flex select-none flex-col gap-4 overflow-hidden rounded-lg border border-border bg-surface p-5"
     >
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 transition-[background] duration-[var(--transition-base)]"
+        className="pointer-events-none absolute inset-0 -z-10 transition-[background] duration-[var(--transition-base)] ease-[var(--ease-standard)]"
         style={{ background: `radial-gradient(130% 120% at 50% 0%, ${rgbaString(color, 0.28)}, transparent 68%)` }}
       />
 

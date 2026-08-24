@@ -53,7 +53,7 @@ export function ResultCard({
       initial={reducedMotion ? false : { opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-3xl border border-accent-warm/30 bg-surface p-6 shadow-[var(--shadow-lift)] sm:p-8"
+      className="relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-accent-warm/30 bg-surface p-6 shadow-[var(--shadow-lift)] sm:p-8"
     >
       {/* One large soft bloom, no fine detail — survives video compression. */}
       <div
@@ -63,7 +63,7 @@ export function ResultCard({
 
       <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
         <div className="mx-auto w-44 shrink-0 sm:mx-0 sm:w-56">
-          <div className="aspect-[2/3] overflow-hidden rounded-2xl bg-bg shadow-[var(--shadow-lift)]">
+          <div className="aspect-[2/3] overflow-hidden rounded-lg bg-bg shadow-[var(--shadow-lift)]">
             {posterUrl ? (
               <img src={posterUrl} alt={movie.title} className="h-full w-full object-cover" />
             ) : (
@@ -80,11 +80,11 @@ export function ResultCard({
             {coldStart && (
               // Stated, not apologised for. The reason text itself already
               // says we don't know their taste yet; this just labels why.
-              <span className="rounded-full border border-muted/30 px-2.5 py-0.5 font-ui text-xs text-muted">
+              <span className="rounded-full border border-border px-2.5 py-0.5 font-ui text-xs text-muted">
                 Learning your taste
               </span>
             )}
-            <span className="rounded-full border border-muted/30 px-2.5 py-0.5 font-ui text-xs text-muted">
+            <span className="rounded-full border border-border px-2.5 py-0.5 font-ui text-xs text-muted">
               {source === 'watchlist' ? 'From your watchlist' : 'Not on your list yet'}
             </span>
           </div>
@@ -110,7 +110,7 @@ export function ResultCard({
 
           {/* The reason is the product, so it's set larger than the metadata
               and given its own quiet surface rather than reading as caption. */}
-          <p className="rounded-2xl border border-muted/15 bg-bg/60 px-5 py-4 font-ui text-base leading-relaxed text-text sm:text-lg">
+          <p className="rounded-lg border border-border bg-bg/60 px-5 py-4 font-ui text-base leading-relaxed text-text sm:text-lg">
             {reason}
           </p>
 
@@ -151,7 +151,7 @@ export function ResultCard({
 
             <Link
               to={`/movie/${movie.tmdb_id}`}
-              className="rounded-xl border border-muted/25 px-5 py-3 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] hover:border-muted/50"
+              className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 active:scale-[0.97] transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/50"
             >
               {actionState === 'watched' ? 'Rate it' : 'Full details'}
             </Link>
@@ -163,7 +163,7 @@ export function ResultCard({
                 type="button"
                 onClick={onNotThisOne}
                 disabled={actionState === 'pending'}
-                className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] hover:text-text disabled:opacity-60"
+                className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text disabled:opacity-60"
               >
                 Not this one
               </button>

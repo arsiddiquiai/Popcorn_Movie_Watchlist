@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FilterBar, DEFAULT_ADVANCED_FILTERS, hasActiveAdvancedFilters, type AdvancedFilters } from '../components/search/FilterBar'
+import { Page, PageHeader } from '../components/layout/Page'
 import { LanguageChips } from '../components/search/LanguageChips'
 import { MovieRow } from '../components/search/MovieRow'
 import { SearchResultCard } from '../components/search/SearchResultCard'
@@ -132,24 +133,26 @@ export default function Search() {
   }, [debouncedQuery, filtersActive, language, filters])
 
   return (
-    <div className="flex min-h-screen flex-col gap-6 px-6 py-10">
-      <div className="mx-auto w-full max-w-2xl">
+    <Page width="wide">
+      <PageHeader title="Discover" subtitle="Search the catalogue, or browse by language and mood." />
+
+      <div className="-mt-4 w-full max-w-2xl">
         <input
           type="search"
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Search for a movie…"
           autoFocus
-          className="w-full rounded-xl border border-muted/25 bg-surface px-4 py-3 font-ui text-sm text-text outline-none focus:border-accent-cold"
+          className="w-full rounded-lg border border-border bg-surface px-5 py-4 font-ui text-base text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted/70 focus:border-accent-cold"
         />
       </div>
 
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+      <div className="flex w-full flex-col gap-4">
         <LanguageChips value={language} onChange={setLanguage} />
         <FilterBar filters={filters} onChange={setFilters} disabled={Boolean(debouncedQuery)} />
       </div>
 
-      <div className="mx-auto w-full max-w-6xl flex-1">
+      <div className="flex-1">
         {debouncedQuery ? (
           <>
             {searchStatus === 'loading' && <PosterGridSkeleton />}
@@ -205,6 +208,6 @@ export default function Search() {
           </section>
         )}
       </div>
-    </div>
+    </Page>
   )
 }

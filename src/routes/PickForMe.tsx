@@ -205,7 +205,7 @@ export default function PickForMe() {
             <button
               type="button"
               onClick={() => void handleSubmit()}
-              className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg"
+              className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
             >
               Try again
             </button>
@@ -213,7 +213,7 @@ export default function PickForMe() {
           <button
             type="button"
             onClick={startOver}
-            className="rounded-xl border border-muted/25 px-5 py-3 font-ui text-sm text-text"
+            className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 active:scale-[0.97]"
           >
             Change what you told me
           </button>
@@ -234,7 +234,7 @@ export default function PickForMe() {
         <button
           type="button"
           onClick={startOver}
-          className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg"
+          className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
         >
           Start over
         </button>
@@ -272,7 +272,7 @@ export default function PickForMe() {
         <button
           type="button"
           onClick={startOver}
-          className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] hover:text-text"
+          className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text"
         >
           Ask again with a different mood
         </button>

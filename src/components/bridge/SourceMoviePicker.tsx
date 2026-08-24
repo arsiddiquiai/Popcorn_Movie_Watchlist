@@ -69,7 +69,7 @@ export function SourceMoviePicker({ selected, onSelect }: SourceMoviePickerProps
         }}
         onFocus={() => setOpen(true)}
         placeholder="Search for a film you love…"
-        className="w-full rounded-xl border border-border bg-surface px-4 py-3 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] placeholder:text-muted-subtle focus:border-accent-warm"
+        className="w-full rounded-xl border border-border bg-surface px-4 py-3 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted-subtle focus:border-accent-warm"
       />
       {open && results.length > 0 && (
         <ul className="absolute z-10 mt-2 w-full overflow-hidden rounded-xl border border-border bg-surface shadow-[var(--shadow-lift)]">
@@ -83,7 +83,7 @@ export function SourceMoviePicker({ selected, onSelect }: SourceMoviePickerProps
                     onSelect(movie)
                     setOpen(false)
                   }}
-                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-[var(--transition-fast)] hover:bg-surface-2"
+                  className="flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-surface-2"
                 >
                   {posterUrl ? (
                     <img src={posterUrl} alt="" className="h-14 w-10 shrink-0 rounded-md object-cover" />

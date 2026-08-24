@@ -6,6 +6,7 @@ import {
   sendAssistantMessage,
   type AssistantMessage,
 } from '../lib/assistantClient'
+import { PageHeader } from '../components/layout/Page'
 import { useTheme } from '../theme/ThemeProvider'
 
 interface ChatMessage extends AssistantMessage {
@@ -65,15 +66,13 @@ export default function Assistant() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-8">
-      <header className="mb-4">
-        <h1 className="font-display text-2xl text-text">Movie Assistant</h1>
-        <p className="mt-1 font-ui text-sm text-muted">
-          Talk through what to watch — ask about a film, describe a mood, or say "add it" when something clicks.
-        </p>
-      </header>
+    <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10 sm:py-14">
+      <PageHeader
+        title="Movie Assistant"
+        subtitle={'Talk through what to watch — ask about a film, describe a mood, or say "add it" when something clicks.'}
+      />
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto py-4">
+      <div className="mt-10 flex flex-1 flex-col gap-4 overflow-y-auto">
         {messages.length === 0 && (
           <p className="rounded-xl border border-border bg-surface px-4 py-3 font-ui text-sm text-muted">
             Try: "Something like Parasite but lighter?" or "What's a good 90-minute thriller?"
@@ -89,13 +88,13 @@ export default function Assistant() {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div
-              className={`max-w-[85%] rounded-2xl px-4 py-2.5 font-ui text-sm leading-relaxed ${
+              className={`max-w-[85%] rounded-lg px-4 py-3 font-ui text-sm leading-relaxed ${
                 msg.role === 'user'
-                  ? 'bg-accent-warm text-bg'
-                  : 'border border-border bg-surface text-text'
+                  ? 'bg-accent-warm font-medium text-bg'
+                  : 'border border-border bg-surface text-text shadow-sm'
               }`}
             >
-              <p>{msg.content}</p>
+              <p className="whitespace-pre-wrap">{msg.content}</p>
               {msg.addedTmdbId && (
                 <Link
                   to={`/movie/${msg.addedTmdbId}`}
@@ -110,7 +109,7 @@ export default function Assistant() {
 
         {sending && (
           <div className="flex justify-start">
-            <div className="rounded-2xl border border-border bg-surface px-4 py-2.5 font-ui text-sm text-muted">
+            <div className="rounded-lg border border-border bg-surface px-4 py-2.5 font-ui text-sm text-muted">
               {reducedMotion ? (
                 'Thinking…'
               ) : (
@@ -144,7 +143,7 @@ export default function Assistant() {
           event.preventDefault()
           void handleSend()
         }}
-        className="flex items-center gap-2 border-t border-border pt-4"
+        className="mt-6 flex items-center gap-2 border-t border-border pt-6"
       >
         <input
           type="text"
@@ -153,7 +152,7 @@ export default function Assistant() {
           placeholder="Ask about something to watch…"
           maxLength={1000}
           disabled={sending || Boolean(cappedMessage)}
-          className="flex-1 rounded-full border border-border bg-surface px-4 py-2.5 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] placeholder:text-muted-subtle focus:border-accent-warm disabled:opacity-60"
+          className="flex-1 rounded-full border border-border bg-surface px-4 py-2.5 font-ui text-sm text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted-subtle focus:border-accent-warm disabled:opacity-60"
         />
         <button
           type="submit"

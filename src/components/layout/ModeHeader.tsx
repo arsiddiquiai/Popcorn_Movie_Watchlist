@@ -32,9 +32,9 @@ export function ModeHeader({ mode }: { mode: Exclude<AppMode, null> }) {
   const [dismissed, dismiss] = useDismissableIntro(mode)
 
   return (
-    <div className={`border-b px-6 py-2.5 ${copy.barClass}`}>
+    <div className={`border-b px-6 py-3 sm:px-10 ${copy.barClass}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className={`font-display text-xs uppercase tracking-widest ${copy.textClass}`}>{copy.label}</span>
+        <span className={`font-display text-[11px] font-semibold tracking-[0.18em] uppercase ${copy.textClass}`}>{copy.label}</span>
 
         {!dismissed && (
           <div className="flex items-center gap-3">

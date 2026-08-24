@@ -91,9 +91,9 @@ export default function CinemaBridge() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center gap-10 px-6 py-12">
+    <div className="flex min-h-screen flex-col items-center gap-10 px-6 py-10 sm:px-10 sm:py-14">
       <div className="w-full max-w-xl">
-        <h1 className="font-display text-3xl text-text sm:text-4xl">Cinema Bridge</h1>
+        <h1 className="font-display text-3xl leading-[1.1] font-bold tracking-tight text-text sm:text-4xl">Cinema Bridge</h1>
         <p className="mt-2 font-ui text-sm text-muted">
           Loved a film? Find its equivalent in another industry or language.
         </p>
@@ -136,7 +136,7 @@ export default function CinemaBridge() {
             return (
               <div
                 key={match.tmdb_id}
-                className="flex gap-4 rounded-2xl border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+                className="flex gap-4 rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
               >
                 <div className="aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg bg-bg sm:w-24">
                   {posterUrl ? (
@@ -167,7 +167,7 @@ export default function CinemaBridge() {
                         type="button"
                         onClick={() => void handleAdd(match.tmdb_id)}
                         disabled={state === 'loading'}
-                        className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-3 py-1.5 font-ui text-xs font-semibold text-accent-warm transition-colors duration-[var(--transition-fast)] hover:bg-accent-warm/20 disabled:opacity-60"
+                        className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-3 py-1.5 font-ui text-xs font-semibold text-accent-warm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 disabled:opacity-60"
                       >
                         {state === 'loading' ? 'Adding…' : state === 'error' ? 'Retry add' : 'Add to Watchlist'}
                       </button>
@@ -187,7 +187,7 @@ export default function CinemaBridge() {
           <button
             type="button"
             onClick={startOver}
-            className="mt-2 self-center font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] hover:text-text"
+            className="mt-2 self-center font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text"
           >
             Try a different film
           </button>
@@ -207,7 +207,7 @@ export default function CinemaBridge() {
               <button
                 type="button"
                 onClick={() => void handleSubmit()}
-                className="rounded-xl bg-accent-warm px-5 py-3 font-ui text-sm font-semibold text-bg"
+                className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
               >
                 Try again
               </button>
@@ -215,7 +215,7 @@ export default function CinemaBridge() {
             <button
               type="button"
               onClick={startOver}
-              className="rounded-xl border border-border px-5 py-3 font-ui text-sm text-text"
+              className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 active:scale-[0.97]"
             >
               Change what you told me
             </button>
