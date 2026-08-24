@@ -1,4 +1,59 @@
 {
+  /*
+   * The root tsconfig.json serves TWO independent readers, which is why it
+   * carries both `references` AND its own `compilerOptions` — an unusual
+   * combination, but a deliberate one:
+   *
+   *   1. Local/CI type-checking (`npm run build`'s `tsc -b` step, and any
+   *      editor). This uses the `references` below to build the app/node/
+   *      functions/api sub-projects with each one's own tsconfig — with
+   *      `files: []` here, tsc -b compiles nothing at the root itself, only
+   *      dispatches into the referenced projects. This part is unchanged
+   *      and still the source of truth for local strictness.
+   *
+   *   2. Vercel's own compilation of /api at deploy time. Vercel's docs are
+   *      explicit: "You can use a tsconfig.json file at the root of your
+   *      project to configure the TypeScript compiler. Most options are
+   *      supported aside from Path Mappings and Project References." That
+   *      is a real, confirmed incompatibility with this project's existing
+   *      structure — before this fix, Vercel would have read this exact
+   *      file, found `references` (unsupported) and `files: []` (nothing),
+   *      and had NO usable compilerOptions at all for compiling api/*.ts,
+   *      falling back to undocumented bare defaults rather than the
+   *      settings tsconfig.api.json actually specifies for that code path
+   *      (strict, verbatimModuleSyntax, bundler resolution, etc).
+   *
+   *      It didn't cause the ERR_MODULE_NOT_FOUND outage (that was a plain
+   *      import-specifier bug, reproduced and fixed independently — see
+   *      that commit) and a real deploy against the old config did produce
+   *      working output, so Vercel's actual defaults are evidently
+   *      forgiving enough for straightforward ESM. But "evidently forgiving
+   *      enough today" is not the same as "the settings this project
+   *      actually intends," and there's no guarantee that stays true as the
+   *      api/ code grows. The compilerOptions below mirror
+   *      tsconfig.api.json's, so whichever file Vercel actually reads, the
+   *      real settings are available directly at the root — no reference
+   *      resolution required.
+   *
+   * These compilerOptions apply to nothing under `files: []`/no `include`,
+   * so they cannot change what `tsc -b` compiles locally — they exist
+   * purely as the direct, standalone config Vercel's reader can consume.
+   */
+  "compilerOptions": {
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "types": ["node"],
+    "skipLibCheck": true,
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noEmit": true
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
