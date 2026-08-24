@@ -7,9 +7,17 @@ export interface AssistantMessage {
   content: string
 }
 
+export interface AssistantSuggestedMovie {
+  tmdb_id: number
+  title: string
+  poster_path: string | null
+  release_year: number | null
+}
+
 export interface AssistantResult {
   reply: string
   added_tmdb_id: number | null
+  suggested_movies: AssistantSuggestedMovie[]
   tool_calls_used: number
   session_id: string | null
 }

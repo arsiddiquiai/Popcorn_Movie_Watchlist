@@ -1655,8 +1655,22 @@ interface AssistantResponse {
    *  and Claude called the add-to-watchlist tool. Lets the UI show a
    *  confirmation without re-parsing the reply text for it. */
   added_tmdb_id: number | null
+  /** Every film search_movies_by_title / discover_movies_by_criteria
+   *  actually surfaced this turn, deduplicated and capped — structured data
+   *  for one-tap "Add to Watchlist" chips, additive alongside `reply`'s
+   *  prose rather than something the client has to parse out of it. Never
+   *  populated from add_to_watchlist results (nothing to add-a-button for
+   *  something already added) or from Claude's own text. */
+  suggested_movies: AssistantSuggestedMovie[]
   tool_calls_used: number
   session_id: string | null
+}
+
+interface AssistantSuggestedMovie {
+  tmdb_id: number
+  title: string
+  poster_path: string | null
+  release_year: number | null
 }
 
 const ASSISTANT_MESSAGE_MAX_CHARS = 1000
@@ -1810,6 +1824,11 @@ const ASSISTANT_SYSTEM_PROMPT = [
   '  showing it, which this conversation has no way to do reliably.',
   '- Keep replies short and conversational — a couple of sentences, not an essay.',
   '- Never fabricate plot details, cast, or facts about a film beyond what its tool result told you.',
+  '- Plain text only — no markdown. Never use **bold**, bullet lists, or headings; the chat display renders',
+  '  exactly what you send, so markdown syntax appears as literal asterisks and dashes to the user.',
+  '- When mentioning more than one film, put each on its own line (a real line break, not a bullet or dash)',
+  '  so they read as a short list rather than one run-on paragraph. Titles do not need special formatting —',
+  '  they are already shown as their own suggestion cards below your reply.',
 ].join('\n')
 
 /** Shape shared by TMDB's /search/movie and /discover/movie result items —
@@ -1942,6 +1961,11 @@ interface AssistantToolResult {
   /** Set only by a successful add_to_watchlist call, so the caller can
    *  surface it without re-parsing tool results. */
   addedTmdbId?: number
+  /** Set only by search_movies_by_title / discover_movies_by_criteria, when
+   *  they actually found something — the same movies Claude sees, handed
+   *  back out to the caller so it can also build structured suggestion
+   *  chips without re-parsing `content`'s JSON string. */
+  suggestedMovies?: MovieRow[]
 }
 
 async function executeAssistantTool(
@@ -1952,13 +1976,21 @@ async function executeAssistantTool(
   if (toolUse.name === 'search_movies_by_title') {
     const { query } = toolUse.input as { query: string }
     const result = await searchMoviesByTitle(query)
-    return { toolUseId: toolUse.id, content: JSON.stringify(result) }
+    return {
+      toolUseId: toolUse.id,
+      content: JSON.stringify(result),
+      suggestedMovies: 'results' in result ? result.results : undefined,
+    }
   }
 
   if (toolUse.name === 'discover_movies_by_criteria') {
     const { genres, min_rating } = toolUse.input as { genres: string[]; min_rating?: number }
     const result = await discoverMoviesByCriteria(genres ?? [], min_rating)
-    return { toolUseId: toolUse.id, content: JSON.stringify(result) }
+    return {
+      toolUseId: toolUse.id,
+      content: JSON.stringify(result),
+      suggestedMovies: 'results' in result ? result.results : undefined,
+    }
   }
 
   if (toolUse.name === 'add_to_watchlist') {
@@ -2009,11 +2041,22 @@ async function executeAssistantTool(
  *  invocations across the whole turn. Unlike callClaudeForTool (which
  *  forces exactly one tool call), this uses tool_choice: "auto" — a text
  *  reply with no tool call at all is the common case for a chat turn. */
+/** Cap on suggestion chips returned to the client — a single discover call
+ *  alone can surface up to 5 (searchMoviesByTitle/discoverMoviesByCriteria
+ *  both slice to 5), and up to 3 tool calls can run in one turn, so this
+ *  keeps the chip row from growing unbounded across a long tool-use turn. */
+const ASSISTANT_MAX_SUGGESTED_MOVIES = 6
+
 async function runAssistantConversation(
   input: AssistantInput,
   supabase: SupabaseClient<Database>,
   userId: string,
-): Promise<{ reply: string; addedTmdbId: number | null; toolCallsUsed: number }> {
+): Promise<{
+  reply: string
+  addedTmdbId: number | null
+  toolCallsUsed: number
+  suggestedMovies: AssistantSuggestedMovie[]
+}> {
   const messages: Anthropic.MessageParam[] = [
     ...input.history.map((turn) => ({ role: turn.role, content: turn.content })),
     { role: 'user' as const, content: input.message },
@@ -2021,6 +2064,9 @@ async function runAssistantConversation(
 
   let toolCallsUsed = 0
   let addedTmdbId: number | null = null
+  // Deduplicated by tmdb_id, insertion order — a film mentioned by both a
+  // search and a discover call in the same turn only gets one chip.
+  const suggestedMovies = new Map<number, AssistantSuggestedMovie>()
 
   for (let round = 0; round <= ASSISTANT_MAX_TOOL_CALLS; round += 1) {
     const atCap = toolCallsUsed >= ASSISTANT_MAX_TOOL_CALLS
@@ -2048,7 +2094,12 @@ async function runAssistantConversation(
 
     if (toolUseBlocks.length === 0 || atCap) {
       const reply = textBlocks.map((b) => b.text).join('\n').trim()
-      return { reply: reply || "I'm not sure how to answer that — try rephrasing?", addedTmdbId, toolCallsUsed }
+      return {
+        reply: reply || "I'm not sure how to answer that — try rephrasing?",
+        addedTmdbId,
+        toolCallsUsed,
+        suggestedMovies: [...suggestedMovies.values()],
+      }
     }
 
     messages.push({ role: 'assistant', content: response.content })
@@ -2059,6 +2110,16 @@ async function runAssistantConversation(
     toolCallsUsed += toolUseBlocks.length
     for (const result of results) {
       if (result.addedTmdbId) addedTmdbId = result.addedTmdbId
+      for (const movie of result.suggestedMovies ?? []) {
+        if (!suggestedMovies.has(movie.tmdb_id)) {
+          suggestedMovies.set(movie.tmdb_id, {
+            tmdb_id: movie.tmdb_id,
+            title: movie.title,
+            poster_path: movie.poster_path,
+            release_year: movie.release_year,
+          })
+        }
+      }
     }
 
     messages.push({
@@ -2073,7 +2134,62 @@ async function runAssistantConversation(
 
   // Unreachable in practice (the atCap branch above always returns), but
   // keeps the function's return type honest without a non-null assertion.
-  return { reply: "I'm not sure how to answer that — try rephrasing?", addedTmdbId, toolCallsUsed }
+  return {
+    reply: "I'm not sure how to answer that — try rephrasing?",
+    addedTmdbId,
+    toolCallsUsed,
+    suggestedMovies: [...suggestedMovies.values()],
+  }
+}
+
+/**
+ * Narrows the accumulated suggestion list down to films the final reply
+ * actually names.
+ *
+ * A multi-round tool-use turn can call search/discover more than once while
+ * Claude explores different angles (observed live: 5 calls in one turn,
+ * chasing runtime data across several genre combinations) — accumulating
+ * every result across every round produces chips for films the reply never
+ * mentions, which breaks the point of "add what was just suggested." This
+ * ties the chips back to the text the user is actually reading.
+ *
+ * Falls back to the unfiltered (capped) list if nothing matches — a title
+ * the model phrased differently from TMDB's exact casing/punctuation
+ * shouldn't make every chip vanish; a loosely-relevant chip beats none.
+ */
+function filterSuggestedMoviesByReply(reply: string, movies: AssistantSuggestedMovie[]): AssistantSuggestedMovie[] {
+  const normalise = (s: string) => s.toLowerCase().replace(/[’']/g, "'").replace(/\s+/g, ' ').trim()
+  const normalisedReply = normalise(reply)
+
+  const mentioned = movies.filter((m) => normalisedReply.includes(normalise(m.title)))
+  if (mentioned.length === 0) return movies
+
+  // Same title, different production — a genuine TMDB reality (a title can
+  // have an original, a remake, and unrelated stage/TV entries all sharing
+  // one name), observed live: "Singin' in the Rain" and "It's a Wonderful
+  // Life" each matched 2-4 distinct tmdb_ids above on title text alone. The
+  // system prompt has Claude state the year next to a title it names
+  // ("Singin' in the Rain (1952)"), so prefer whichever candidate's year is
+  // also in the reply; only fall back to "just pick one" when the reply
+  // never disambiguates by year at all.
+  const byTitle = new Map<string, AssistantSuggestedMovie[]>()
+  for (const m of mentioned) {
+    const key = normalise(m.title)
+    const group = byTitle.get(key) ?? []
+    group.push(m)
+    byTitle.set(key, group)
+  }
+
+  const result: AssistantSuggestedMovie[] = []
+  for (const group of byTitle.values()) {
+    if (group.length === 1) {
+      result.push(group[0])
+      continue
+    }
+    const yearMatched = group.filter((m) => m.release_year && normalisedReply.includes(String(m.release_year)))
+    result.push(...(yearMatched.length > 0 ? yearMatched : group.slice(0, 1)))
+  }
+  return result
 }
 
 async function handleAssistant(
@@ -2103,7 +2219,16 @@ async function handleAssistant(
     }
   }
 
-  const { reply, addedTmdbId, toolCallsUsed } = await runAssistantConversation(input, supabase, userId)
+  const { reply, addedTmdbId, toolCallsUsed, suggestedMovies: rawSuggestedMovies } = await runAssistantConversation(
+    input,
+    supabase,
+    userId,
+  )
+  // Filter (relevance to what the reply actually says) BEFORE cap (chip-row
+  // size), not the other way around — capping first was the earlier bug:
+  // it truncated by accumulation order, discarding films the reply named
+  // before the relevance filter ever got to consider them.
+  const suggestedMovies = filterSuggestedMoviesByReply(reply, rawSuggestedMovies).slice(0, ASSISTANT_MAX_SUGGESTED_MOVIES)
 
   // Logged with the same shape as the other modes. mood_text carries the
   // user's message (their free-text input, same role it plays for pick),
@@ -2134,6 +2259,7 @@ async function handleAssistant(
   const response: AssistantResponse = {
     reply,
     added_tmdb_id: addedTmdbId,
+    suggested_movies: suggestedMovies,
     tool_calls_used: toolCallsUsed,
     session_id: session?.id ?? null,
   }
