@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { AuthGate } from './auth/AuthGate'
 import { AuthProvider } from './auth/AuthProvider'
 import { ProtectedLayout } from './auth/ProtectedLayout'
+import AccountDeleted from './routes/AccountDeleted'
 import Assistant from './routes/Assistant'
 import CinemaBridge from './routes/CinemaBridge'
 import ComingSoon from './routes/ComingSoon'
@@ -29,6 +30,10 @@ function App() {
                 password, and ProtectedLayout would require being logged in
                 a different way to even reach it. */}
             <Route path="/reset-password" element={<ResetPassword />} />
+            {/* Deliberately outside ProtectedLayout: by the time this is
+                reached, the account no longer exists — there is no session
+                left to guard. */}
+            <Route path="/account-deleted" element={<AccountDeleted />} />
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />

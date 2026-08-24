@@ -9,12 +9,20 @@
     },
     "api/feedback.ts": {
       "maxDuration": 15
+    },
+    "api/user-api-key.ts": {
+      "maxDuration": 10
+    },
+    "api/delete-account.ts": {
+      "maxDuration": 15
     }
   },
 
   "rewrites": [
     { "source": "/ai", "destination": "/api/ai" },
     { "source": "/feedback", "destination": "/api/feedback" },
+    { "source": "/user-api-key", "destination": "/api/user-api-key" },
+    { "source": "/delete-account", "destination": "/api/delete-account" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

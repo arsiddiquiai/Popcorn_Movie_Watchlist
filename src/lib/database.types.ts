@@ -7,6 +7,7 @@ export type Json = string | number | boolean | null | { [key: string]: Json | un
 
 export type WatchlistStatus = 'want' | 'watched' | 'dropped'
 export type AiSessionMode = 'pick' | 'bridge' | 'taste' | 'assistant'
+export type AiProvider = 'anthropic' | 'openai' | 'gemini'
 
 export interface Database {
   public: {
@@ -222,6 +223,7 @@ export interface Database {
         Row: {
           id: string
           user_id: string
+          provider: AiProvider
           /** AES-256-GCM ciphertext (iv:tag:data, base64). Never plaintext,
            *  and never selected by the browser — there is no select policy. */
           encrypted_key: string
@@ -231,6 +233,7 @@ export interface Database {
         Insert: {
           id?: string
           user_id: string
+          provider: AiProvider
           encrypted_key: string
           model_pref?: string | null
           created_at?: string
@@ -238,6 +241,7 @@ export interface Database {
         Update: {
           id?: string
           user_id?: string
+          provider?: AiProvider
           encrypted_key?: string
           model_pref?: string | null
           created_at?: string

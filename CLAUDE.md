@@ -106,11 +106,23 @@ ratings          id · user_id · tmdb_id · score(int 1-10) · reason_tags(text
 ai_sessions      id · user_id · mode(pick|bridge|taste|assistant) · mood_text · energy_level ·
                  minutes_available · company · tier(1|2) · source_tmdb_id · target ·
                  recommended_tmdb_id · reason_text · accepted(bool) · created_at
+feedback         id · user_id(nullable) · message · contact_email(nullable) · created_at
+user_api_keys    id · user_id · provider(anthropic|openai|gemini) · encrypted_key · model_pref · created_at
 ```
 
-RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`.
-`movies_cache` is shared reference data, readable by any authenticated user.
+RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`.
+`movies_cache` is shared reference data, readable by any authenticated user; writable (insert-only) by any
+authenticated user, bounded by shape CHECK constraints — no client can update or delete an existing row.
 **Favorites are derived** (`score >= 9`) — do not add a favorites column or table.
+
+`feedback` is write-only (insert only) from the client — no select policy for authenticated. On account deletion,
+`user_id` is set to null (`on delete set null`) rather than the row being removed, so product feedback isn't lost.
+
+`user_api_keys` is write-mostly: insert/delete under normal RLS, plus a narrow select policy scoped to
+`id/provider/model_pref/created_at` only (for the Settings "key saved" indicator) — `encrypted_key` is not a
+granted column for `authenticated` at all, at the Postgres column-privilege level, so no client query can ever
+return it, including the row's own owner. Only the server, via the service-role key, reads and decrypts it, at the
+moment a request actually needs it. On account deletion this table cascades (`on delete cascade`).
 
 ---
 
@@ -126,13 +138,29 @@ RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings
 | Cinema Bridge | Discover | Cross-industry equivalents |
 | Movie Assistant | Discover | Conversational discovery — chat, tool-assisted search, add to watchlist |
 | Taste DNA | — | Animated stats, personality, Blind Spots |
-| Settings | — | Themes, reduced motion, export, Coming Soon |
+| Settings | — | Themes, reduced motion, export, BYOK provider key, danger-zone account deletion |
+| Feedback | — | Free-text form → `feedback` table + email notification |
+| Privacy / Terms | — | Static legal pages, footer-linked |
+| Account Deleted | — | Post-deletion confirmation, outside auth entirely |
 
 ---
 
 ## AI architecture
 
-**One Netlify Function, `/ai`**, routed by a `mode` parameter. One deploy, one env var, one debugging surface.
+**One serverless function, `/ai`** (Vercel `api/ai.ts`, primary; `netlify/functions/ai.ts` kept as a fallback),
+routed by a `mode` parameter. One deploy, one env var, one debugging surface.
+
+**Bring Your Own Key (BYOK), multi-provider.** `pick`/`bridge`/`taste` route their single forced-tool-call through
+`server/providers/` — a provider-neutral adapter interface (`server/providers/types.ts`) with implementations for
+Anthropic, OpenAI, and Gemini. Before each of those calls, `server/byok.ts` checks for a saved personal key
+(`user_api_keys`, decrypted server-side via the service-role key); if present, that provider/key is tried first. On
+ANY failure — bad key, rate limit, provider outage — the request falls back to the shared Anthropic key
+automatically and returns a `byok_notice` string the UI can surface; the request itself never fails because of a
+bad personal key. `mode: assistant` is **out of scope** for this — its `tool_choice: "auto"` multi-turn loop doesn't
+map onto the same one-forced-tool-call interface, so it stays on the shared Anthropic key only.
+
+Keys are encrypted at rest with AES-256-GCM (`server/crypto.ts`, `BYOK_ENCRYPTION_KEY` server secret, no database
+counterpart) and are never readable by the client once saved — see the Data model section above.
 
 ### `mode: pick` — Pick For Me
 - **Input:** mood text (free), energy 1–5, minutes available, alone / with someone
@@ -156,6 +184,35 @@ RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings
 - **Redirects, doesn't replicate:** a mood/energy/time/company request gets pointed at Pick For Me rather than reasoned through here (the assistant has no access to ratings/watchlist context Pick For Me uses); a cross-industry/language request gets pointed at Cinema Bridge rather than guessed at without its validation gate.
 - ⚠️ **Usage cap: 30 messages per user per UTC calendar day**, checked against `ai_sessions` (`mode='assistant'`, same user, `created_at` within today) **before** calling Claude — a capped-out user must never trigger a paid call. Resets at UTC midnight. This protects real cost at scale now that the app is shared broadly, not just demoed.
 - Log every call to `ai_sessions`
+
+---
+
+## Account deletion
+
+`api/delete-account.ts` — a real server-side operation using the Supabase service-role key
+(`SUPABASE_SERVICE_ROLE_KEY`, server-only), since deleting `auth.users` is only possible through the admin API; no
+RLS policy can grant a user that.
+
+Deletes `ratings` → `watchlist_items` → `ai_sessions` → `user_api_keys` explicitly and in order (each checked
+before proceeding), anonymizes `feedback` (`user_id` → null), deletes `profiles`, and deletes the `auth.users` row
+**last**, only once every prior step has succeeded. `movies_cache` is never touched (shared reference data, not
+user-owned). Every user-owned table also carries `on delete cascade` (or, for `feedback`, `on delete set null`) as
+a backstop — the explicit ordered deletes are the primary path; the cascade is what catches anything a manual step
+might miss, not the other way around. See that file's own header comment for the full failure-mode reasoning.
+
+On success the client calls `supabase.auth.signOut()` and redirects to `/account-deleted` (outside `ProtectedLayout`
+— by then there's no session left to guard) via Settings → Danger zone, which requires typing `DELETE` to confirm.
+
+---
+
+## Feedback & operational email
+
+`api/feedback.ts` inserts into `feedback` and sends a notification via `server/email.ts` (Resend,
+`RESEND_API_KEY` / `MY_NOTIFICATION_EMAIL`, server-only) inline in the same request — a saved-but-unnotified
+submission is still a success for the user. `api/ai.ts` alerts the same way on a genuine unexpected fault (an
+Anthropic `APIError` or an unhandled throw — **not** a 429/504, which are operational noise), throttled to one
+alert per error shape per hour. That throttle is per warm serverless instance, not global — documented as a known
+limitation in `server/email.ts` rather than assumed away.
 
 ---
 

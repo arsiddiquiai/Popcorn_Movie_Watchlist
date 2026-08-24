@@ -18,7 +18,9 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
 import type { Database } from '../src/lib/database.types'
+import { loadUserProviderPreference } from '../server/byok.ts'
 import { sendErrorAlert } from '../server/email.ts'
+import { AdapterError, createAdapter, type ToolSchema } from '../server/providers/index.ts'
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -105,6 +107,10 @@ interface PickResponse {
   reason: string
   alternates: Alternate[]
   cold_start: boolean
+  /** Set only when a saved BYOK key/provider was tried and failed this
+   *  request, so the response fell back to the shared key. Null on every
+   *  other path, including "no personal key configured at all". */
+  byok_notice: string | null
 }
 
 type MovieRow = Database['public']['Tables']['movies_cache']['Row']
@@ -418,6 +424,56 @@ async function callClaudeForTool<T>(
   return { name: toolUse.name, input: toolUse.input as T }
 }
 
+/**
+ * BYOK-aware wrapper around callClaudeForTool. If the caller has a saved
+ * personal key, tries it FIRST via the provider-neutral adapter layer
+ * (server/providers/); on ANY failure (bad key, rate limit, provider
+ * outage — every failure mode collapses to one AdapterError type, so no
+ * special-casing per failure kind, matching the brief's "if the user's
+ * chosen provider/key fails ... fall back" with no distinction drawn), it
+ * falls back to the existing shared-key path unchanged and returns a gentle
+ * note the response can surface. The request itself never fails because of
+ * a bad personal key.
+ *
+ * Scope: pick/bridge/taste only. mode:assistant's tool_choice:"auto"
+ * multi-turn loop is a different shape across providers than one-forced-
+ * tool-call structured output — see server/providers/types.ts's doc comment
+ * — so it stays on the shared Anthropic key for this pass.
+ */
+async function callModelForTool<T>(
+  userId: string,
+  system: string,
+  userContent: string,
+  tool: Anthropic.Messages.ToolUnion,
+): Promise<{ input: T; byokNotice: string | null }> {
+  const pref = await loadUserProviderPreference(userId)
+
+  if (pref) {
+    try {
+      const adapter = createAdapter(pref.provider, pref.apiKey, pref.modelPref)
+      const result = await adapter.callForStructuredOutput<T>({
+        system,
+        userContent,
+        tool: tool as unknown as ToolSchema,
+      })
+      return { input: result.input, byokNotice: null }
+    } catch (err) {
+      console.error(
+        `BYOK (${pref.provider}) call failed, falling back to shared key:`,
+        err instanceof AdapterError ? `[${err.kind}] ${err.message}` : err instanceof Error ? err.message : err,
+      )
+    }
+  }
+
+  const { input } = await callClaudeForTool<T>(system, userContent, [tool])
+  return {
+    input,
+    byokNotice: pref
+      ? `Your saved ${pref.provider} key didn't work this time, so this used Popcorn's shared key instead. Check your key in Settings.`
+      : null,
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Data access
 // ---------------------------------------------------------------------------
@@ -533,7 +589,7 @@ function buildResult(
     .filter((alt, index, list) => list.findIndex((a) => a.tmdb_id === alt.tmdb_id) === index)
     .slice(0, 2)
 
-  return { tier, tmdb_id: raw.tmdb_id, reason: raw.reason, alternates, cold_start: coldStart }
+  return { tier, tmdb_id: raw.tmdb_id, reason: raw.reason, alternates, cold_start: coldStart, byok_notice: null }
 }
 
 /** Same idea as buildResult, but for the combined watchlist+catalogue call,
@@ -562,7 +618,7 @@ function buildCombinedResult(
     .slice(0, 2)
     .map((alt) => ({ tmdb_id: alt.tmdb_id, reason: alt.reason }))
 
-  return { tier, tmdb_id: raw.tmdb_id, reason: raw.reason, alternates, cold_start: coldStart }
+  return { tier, tmdb_id: raw.tmdb_id, reason: raw.reason, alternates, cold_start: coldStart, byok_notice: null }
 }
 
 /** Runtime tolerance (minutes) tried in order — loosened one step at a time
@@ -599,6 +655,7 @@ const SUBSTITUTE_REASON_WATCHLIST =
  *  it as the answer. Pick For Me must never recommend something it
  *  simultaneously says doesn't fit. */
 async function handleColdStart(
+  userId: string,
   candidates: MovieRow[],
   catalogue: MovieRow[],
   input: PickInput,
@@ -619,7 +676,7 @@ async function handleColdStart(
     // to it beats recommending something the reason text would have to
     // apologize for. `catalogue` is the same pre-fetched, genre-less
     // Discover result `handlePick` runs in parallel with the Supabase load.
-    const fallback = await handleTier2(input, true, catalogue)
+    const fallback = await handleTier2(userId, input, true, catalogue)
     if (fallback) return fallback
     // Catalogue empty too (rare) — an honest over-long pick beats nothing
     // at all, per CLAUDE.md's "never return nothing".
@@ -641,10 +698,11 @@ async function handleColdStart(
       : '\nThere are no alternates. Return an empty alternate_reasons array.',
   ].join('\n')
 
-  const { input: copy } = await callClaudeForTool<{ reason: string; alternate_reasons: string[] }>(
+  const { input: copy, byokNotice } = await callModelForTool<{ reason: string; alternate_reasons: string[] }>(
+    userId,
     PICK_SYSTEM_PROMPT,
     userContent,
-    [coldStartCopyTool],
+    coldStartCopyTool,
   )
 
   return {
@@ -656,6 +714,7 @@ async function handleColdStart(
       reason: copy.alternate_reasons?.[i] ?? 'Another option that fits your time tonight.',
     })),
     cold_start: true,
+    byok_notice: byokNotice,
   }
 }
 
@@ -664,6 +723,7 @@ async function handleColdStart(
  *  `handlePick` that runs it alongside the Supabase load, since it doesn't
  *  depend on any Supabase result. */
 async function handleTier2(
+  userId: string,
   input: PickInput,
   coldStart: boolean,
   discovered: MovieRow[],
@@ -681,20 +741,20 @@ async function handleTier2(
     `CANDIDATES:\n${discovered.map(describeMovie).join('\n')}`,
   ].join('\n')
 
-  const { input: picked } = await callClaudeForTool<{
+  const { input: picked, byokNotice } = await callModelForTool<{
     tmdb_id: number
     reason: string
     alternates: Alternate[]
-  }>(PICK_SYSTEM_PROMPT, userContent, [recommendTool])
+  }>(userId, PICK_SYSTEM_PROMPT, userContent, recommendTool)
 
   const allowed = new Set(discovered.map((m) => m.tmdb_id))
-  return (
+  const result =
     buildResult(picked, allowed, 2, coldStart) ??
     // Claude named something outside the candidate list — fall back to the
     // most popular result rather than failing the request. picked.reason is
     // deliberately dropped: it describes the film Claude named, not this one.
     {
-      tier: 2,
+      tier: 2 as const,
       tmdb_id: discovered[0].tmdb_id,
       reason: SUBSTITUTE_REASON_CATALOGUE,
       alternates: discovered.slice(1, 3).map((m) => ({
@@ -702,8 +762,9 @@ async function handleTier2(
         reason: 'Another option that fits your time and mood.',
       })),
       cold_start: coldStart,
+      byok_notice: null,
     }
-  )
+  return { ...result, byok_notice: byokNotice }
 }
 
 /** The non-cold-start, non-empty-watchlist case: one call, both pools.
@@ -712,6 +773,7 @@ async function handleTier2(
  *  used. This is the single-call replacement for what used to be a
  *  Tier-1-then-maybe-Tier-2 cascade. */
 async function handleCombinedPick(
+  userId: string,
   input: PickInput,
   candidates: MovieRow[],
   ratingHistory: RatingContext[],
@@ -736,17 +798,17 @@ async function handleCombinedPick(
       : 'CATALOGUE POOL: none available right now — pick from the watchlist even if the fit is imperfect.',
   ].join('\n')
 
-  const { input: picked } = await callClaudeForTool<{
+  const { input: picked, byokNotice } = await callModelForTool<{
     tmdb_id: number
     source: string
     reason: string
     alternates: { tmdb_id: number; source: string; reason: string }[]
-  }>(PICK_SYSTEM_PROMPT, userContent, [recommendEitherPoolTool])
+  }>(userId, PICK_SYSTEM_PROMPT, userContent, recommendEitherPoolTool)
 
   const watchlistIds = new Set(candidates.map((m) => m.tmdb_id))
   const catalogueIds = new Set(catalogue.map((m) => m.tmdb_id))
 
-  return (
+  const result =
     buildCombinedResult(picked, watchlistIds, catalogueIds, coldStart) ??
     // Claude named something outside both pools — fall back to the most
     // popular catalogue result (or the first watchlist item, if there's no
@@ -754,7 +816,7 @@ async function handleCombinedPick(
     // deliberately dropped: it describes the film Claude named, not this one.
     (catalogue.length > 0
       ? {
-          tier: 2,
+          tier: 2 as const,
           tmdb_id: catalogue[0].tmdb_id,
           reason: SUBSTITUTE_REASON_CATALOGUE,
           alternates: catalogue.slice(1, 3).map((m) => ({
@@ -762,9 +824,10 @@ async function handleCombinedPick(
             reason: 'Another option that fits your time and mood.',
           })),
           cold_start: coldStart,
+          byok_notice: null,
         }
       : {
-          tier: 1,
+          tier: 1 as const,
           tmdb_id: candidates[0].tmdb_id,
           reason: SUBSTITUTE_REASON_WATCHLIST,
           alternates: candidates.slice(1, 3).map((m) => ({
@@ -772,8 +835,9 @@ async function handleCombinedPick(
             reason: 'Another option from your watchlist.',
           })),
           cold_start: coldStart,
+          byok_notice: null,
         })
-  )
+  return { ...result, byok_notice: byokNotice }
 }
 
 async function handlePick(
@@ -798,12 +862,12 @@ async function handlePick(
   if (candidates.length === 0) {
     // Empty watchlist — there is nothing to pick from, so go straight to the
     // catalogue. One call either way.
-    result = await handleTier2(input, coldStart, catalogue)
+    result = await handleTier2(userId, input, coldStart, catalogue)
   } else if (coldStart) {
-    result = await handleColdStart(candidates, catalogue, input)
+    result = await handleColdStart(userId, candidates, catalogue, input)
   } else {
     // One call, both pools — see handleCombinedPick's doc comment for why.
-    result = await handleCombinedPick(input, candidates, ratingHistory, catalogue, coldStart)
+    result = await handleCombinedPick(userId, input, candidates, ratingHistory, catalogue, coldStart)
   }
 
   if (!result) {
@@ -908,6 +972,7 @@ interface BridgeResponse {
   target: string
   matches: BridgeMatch[]
   session_id: string | null
+  byok_notice: string | null
 }
 
 /** What Claude proposes. Deliberately NOT a tmdb_id — ids are resolved from
@@ -1274,10 +1339,11 @@ async function handleBridge(
     .filter(Boolean)
     .join('\n')
 
-  const firstCall = await callClaudeForTool<{ language_code: string; candidates: BridgeCandidate[] }>(
+  const firstCall = await callModelForTool<{ language_code: string; candidates: BridgeCandidate[] }>(
+    userId,
     BRIDGE_SYSTEM_PROMPT,
     `${sourceBlock}\n\nPropose ${BRIDGE_CANDIDATES_WANTED} candidates.`,
-    [bridgeCandidatesTool],
+    bridgeCandidatesTool,
   )
 
   // Server-side map wins; Claude's code is only a fallback for a target the
@@ -1363,6 +1429,7 @@ async function handleBridge(
     target: input.target,
     matches,
     session_id: session?.id ?? null,
+    byok_notice: firstCall.byokNotice,
   }
   return { status: 200, body: response }
 }
@@ -1405,6 +1472,7 @@ interface TasteResponse {
   avg_runtime_minutes: number | null
   blind_spots: BlindSpot[]
   session_id: string | null
+  byok_notice: string | null
 }
 
 /** Minimum ratings before a personality label is claimed. Below this,
@@ -1582,6 +1650,7 @@ async function handleTaste(
 
   let personalityLabel: string | null = null
   let personalityDescription: string | null = null
+  let byokNotice: string | null = null
 
   if (!coldStart) {
     const topGenres = genre_breakdown.slice(0, 3).map((g) => `${g.genre} (${g.count})`).join(', ')
@@ -1602,13 +1671,15 @@ async function handleTaste(
       .join('\n')
 
     try {
-      const { input: copy } = await callClaudeForTool<{ label: string; description: string }>(
+      const { input: copy, byokNotice: notice } = await callModelForTool<{ label: string; description: string }>(
+        userId,
         TASTE_SYSTEM_PROMPT,
         userContent,
-        [personalityTool],
+        personalityTool,
       )
       personalityLabel = copy.label
       personalityDescription = copy.description
+      byokNotice = notice
     } catch (err) {
       // The breakdowns and blind spots are still useful without a label —
       // never fail the whole screen over the one decorative Claude call.
@@ -1646,6 +1717,7 @@ async function handleTaste(
     avg_runtime_minutes,
     blind_spots: blindSpots,
     session_id: session?.id ?? null,
+    byok_notice: byokNotice,
   }
   return { status: 200, body: response }
 }
