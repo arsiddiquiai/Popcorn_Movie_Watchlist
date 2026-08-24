@@ -26,6 +26,13 @@
 -- ------------------------------------------------------------------
 drop policy if exists "Users can delete own ai sessions" on public.ai_sessions;
 
+-- Dropping the policy alone leaves the table-level DELETE grant in place, and
+-- RLS-with-no-policy fails *silently*: PostgREST returns 204 with 0 rows
+-- rather than an error. Revoking the grant makes it a hard 42501 instead, so
+-- a bypass attempt is loud rather than quiet. Verified post-remediation:
+-- DELETE now returns "permission denied for table ai_sessions".
+revoke delete on public.ai_sessions from authenticated;
+
 -- ------------------------------------------------------------------
 -- 2. Narrow UPDATE to the single column the app actually writes.
 -- ------------------------------------------------------------------
