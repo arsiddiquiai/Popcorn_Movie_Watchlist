@@ -28,6 +28,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
 import WebSocket from 'ws'
 import type { Database } from '../../src/lib/database.types'
+import { sendErrorAlert } from '../../server/email.ts'
 
 // ---------------------------------------------------------------------------
 // Environment
@@ -2228,11 +2229,24 @@ export default async function handler(req: Request): Promise<Response> {
       console.error('Anthropic timeout:', err.message)
       return errorResponse('The recommender took too long. Try again.', 504, 'upstream_timeout')
     }
+    // Genuine faults get an alert; expected/transient conditions above do
+    // NOT. A 429 rate-limit and a 504 upstream timeout are operational noise
+    // that would flood the inbox on any busy or slow period, and neither
+    // indicates a bug. An Anthropic APIError (a real upstream fault) and an
+    // unhandled throw (a real defect) both do. Validation rejections never
+    // reach this catch at all — they return 400 before the try block.
+    //
+    // Awaited rather than fire-and-forget: a serverless instance can be
+    // frozen the moment the response is returned, which would drop an
+    // un-awaited send. This is already the failure path, so the added
+    // latency costs nothing the user was going to get anyway.
     if (err instanceof Anthropic.APIError) {
       console.error(`Anthropic API error ${err.status}:`, err.message)
+      await sendErrorAlert({ mode: String(mode), userId, error: err })
       return errorResponse('The recommender failed. Try again.', 502, 'upstream_error')
     }
     console.error(`Unhandled error in mode=${mode}:`, err instanceof Error ? err.stack : err)
+    await sendErrorAlert({ mode: String(mode), userId, error: err })
     return errorResponse('Something went wrong generating your pick.', 500, 'internal_error')
   }
 }

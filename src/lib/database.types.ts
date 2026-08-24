@@ -193,6 +193,57 @@ export interface Database {
         }
         Relationships: []
       }
+      feedback: {
+        Row: {
+          id: string
+          user_id: string | null
+          message: string
+          /** Optional reply-to address the submitter typed in the form. */
+          contact_email: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          message: string
+          contact_email?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          message?: string
+          contact_email?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
+      user_api_keys: {
+        Row: {
+          id: string
+          user_id: string
+          /** AES-256-GCM ciphertext (iv:tag:data, base64). Never plaintext,
+           *  and never selected by the browser — there is no select policy. */
+          encrypted_key: string
+          model_pref: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          encrypted_key: string
+          model_pref?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          encrypted_key?: string
+          model_pref?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -212,3 +263,5 @@ export type MovieCache = Tables<'movies_cache'>
 export type WatchlistItem = Tables<'watchlist_items'>
 export type Rating = Tables<'ratings'>
 export type AiSession = Tables<'ai_sessions'>
+export type Feedback = Tables<'feedback'>
+export type UserApiKey = Tables<'user_api_keys'>

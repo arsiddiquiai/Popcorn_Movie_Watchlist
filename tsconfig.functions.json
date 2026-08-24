@@ -13,6 +13,11 @@
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
     "noEmit": true,
+    /* Relative imports carry an explicit .ts extension so the same source
+       resolves under esbuild (what Vercel/Netlify bundle with) AND under
+       node --experimental-strip-types, which is how these handlers are
+       exercised in tests. Requires noEmit, which is set above. */
+    "allowImportingTsExtensions": true,
 
     /* Linting — stricter than the app config on purpose: this file handles
        auth and untrusted input. */
@@ -21,5 +26,5 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["netlify/functions"]
+  "include": ["netlify/functions", "server"]
 }

@@ -30,10 +30,12 @@ export const groups: NavGroup[] = [
   },
 ]
 
+// Order is fixed by spec: Taste DNA, Coming Soon, Settings, Feedback.
 const moreLinks = [
   { to: '/taste', label: 'Taste DNA' },
   { to: '/coming-soon', label: 'Coming Soon' },
   { to: '/settings', label: 'Settings' },
+  { to: '/feedback', label: 'Feedback' },
 ]
 
 // Written as literal, full class strings (not built via template-string
@@ -150,6 +152,16 @@ export function Nav({ onNavigate }: NavProps = {}) {
           </li>
         ))}
       </ul>
+
+      <div className="flex items-center gap-3 border-t border-border pt-4 font-ui text-[11px] text-muted-subtle">
+        <NavLink to="/privacy" onClick={onNavigate} className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
+          Privacy
+        </NavLink>
+        <span aria-hidden="true">·</span>
+        <NavLink to="/terms" onClick={onNavigate} className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
+          Terms
+        </NavLink>
+      </div>
 
       {user && (
         <div className="flex items-center justify-between gap-2 border-t border-border pt-4">

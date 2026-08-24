@@ -6,11 +6,15 @@
   "functions": {
     "api/ai.ts": {
       "maxDuration": 30
+    },
+    "api/feedback.ts": {
+      "maxDuration": 15
     }
   },
 
   "rewrites": [
     { "source": "/ai", "destination": "/api/ai" },
+    { "source": "/feedback", "destination": "/api/feedback" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
