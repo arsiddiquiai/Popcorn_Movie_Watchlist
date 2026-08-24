@@ -18,7 +18,7 @@ import { Page, PageHeader } from '../components/layout/Page'
  * ever treated as binding.
  */
 
-const UPDATED = '25 August 2026'
+const UPDATED = '24 August 2026'
 
 function Prose({ children }: { children: ReactNode }) {
   return <div className="flex max-w-prose flex-col gap-5 font-ui text-sm leading-relaxed text-muted">{children}</div>

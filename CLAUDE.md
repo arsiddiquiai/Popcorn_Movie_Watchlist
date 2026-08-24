@@ -194,7 +194,9 @@ counterpart) and are never readable by the client once saved — see the Data mo
 RLS policy can grant a user that.
 
 Deletes `ratings` → `watchlist_items` → `ai_sessions` → `user_api_keys` explicitly and in order (each checked
-before proceeding), anonymizes `feedback` (`user_id` → null), deletes `profiles`, and deletes the `auth.users` row
+before proceeding), anonymizes `feedback` (`user_id` and `contact_email` both → null — a real bug caught by testing
+live: clearing only `user_id` left a directly-identifying personal email address readable in the table), deletes
+`profiles`, and deletes the `auth.users` row
 **last**, only once every prior step has succeeded. `movies_cache` is never touched (shared reference data, not
 user-owned). Every user-owned table also carries `on delete cascade` (or, for `feedback`, `on delete set null`) as
 a backstop — the explicit ordered deletes are the primary path; the cascade is what catches anything a manual step

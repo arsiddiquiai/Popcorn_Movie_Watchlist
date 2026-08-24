@@ -92,7 +92,20 @@ export async function POST(req: Request): Promise<Response> {
     { label: 'user_api_keys', run: () => service.from('user_api_keys').delete().eq('user_id', userId) },
     // Anonymize, not delete — feedback.user_id uses ON DELETE SET NULL, and
     // that same intent applies here: the message stays, the identity doesn't.
-    { label: 'feedback (anonymize)', run: () => service.from('feedback').update({ user_id: null }).eq('user_id', userId) },
+    //
+    // contact_email is cleared in the SAME update, not left alone: it's a
+    // real, directly-identifying personal email address the submitter typed
+    // in by hand — arguably more identifying than user_id, since it can be
+    // read and acted on without any database access at all. Nulling user_id
+    // but leaving contact_email in place would not be "disassociated from
+    // your account" (the Privacy Policy's own phrase for this) in any
+    // meaningful sense — anyone with table access could still trace the row
+    // straight back to a real person. Found and fixed after testing it live,
+    // not assumed from reading the code.
+    {
+      label: 'feedback (anonymize)',
+      run: () => service.from('feedback').update({ user_id: null, contact_email: null }).eq('user_id', userId),
+    },
     { label: 'profiles', run: () => service.from('profiles').delete().eq('id', userId) },
   ]
 
