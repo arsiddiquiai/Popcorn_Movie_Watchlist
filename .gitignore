@@ -39,3 +39,5 @@ PW file for popcorn project.txt
 
 # Local account backups taken before destructive seed/reset runs (real user data)
 backup-*.json
+
+supabase/.temp/
