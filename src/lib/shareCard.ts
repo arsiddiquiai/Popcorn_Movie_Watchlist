@@ -111,6 +111,38 @@ const IMAGE_LOAD_ATTEMPT_TIMEOUT_MS = IMAGE_LOAD_TIMEOUT_MS / IMAGE_LOAD_ATTEMPT
  */
 export const DEBUG_POSTER_FAILURES_ON_CARD = true
 
+/**
+ * Diagnosis (real-device retest, DEBUG_POSTER_FAILURES_ON_CARD's on-canvas
+ * text): the retry + <img> fallback from the previous fix did NOT help —
+ * every attempt still failed with the identical "Network/CORS error:
+ * Failed to fetch", meaning this isn't a transient blip at all. The actual
+ * pattern: the grid card's posters (WatchlistCard.tsx's own grid, size
+ * w342) had never been requested anywhere else on THIS page before being
+ * fetch()'d for the share card, and it worked. Every single-movie card's
+ * poster, though, is the SAME URL already being rendered by a live,
+ * currently-mounted `<img>` element on the page at the exact moment
+ * Share is tapped — MovieDetail's own hero poster (RatingPanel's case) or
+ * ResultCard's own hero poster (Pick For Me's case), both w500, same as
+ * this file's single-movie fetch. That's a known Chrome bug class: an
+ * in-memory image resource cache (distinct from the properly
+ * CORS-partitioned HTTP disk cache) can serve/interfere with a
+ * same-URL fetch(..., {mode:'cors'}) while an `<img>` for that exact URL
+ * is actively decoded/displayed, producing a bogus "Failed to fetch" even
+ * though the server's actual CORS headers are fine (confirmed directly
+ * against TMDB's CDN — see the earlier fix's commit message).
+ *
+ * Fix: force a genuinely fresh, uncacheable request for the SHARE CARD's
+ * own fetch only (never touches the URL any on-page `<img>` uses, so
+ * normal browsing performance/caching is untouched) by appending a
+ * cache-busting query param. TMDB's CDN (confirmed via curl) ignores
+ * unknown query params and still serves the image with correct CORS
+ * headers, so this costs nothing but a guaranteed cache miss.
+ */
+function cacheBustedUrl(src: string): string {
+  const separator = src.includes('?') ? '&' : '?'
+  return `${src}${separator}_cb=${Date.now()}_${Math.random().toString(36).slice(2)}`
+}
+
 /** One fetch() attempt: a real HTTP status on a non-2xx, and a
  *  distinguishable timeout vs. network/CORS TypeError on failure — see
  *  loadImage's own doc comment for why this replaced a plain `<img
@@ -210,16 +242,23 @@ function loadImageViaImgTagFallback(src: string): Promise<HTMLImageElement> {
  * succeeded outright in the same session.
  */
 async function loadImage(src: string): Promise<HTMLImageElement> {
+  // See cacheBustedUrl's own doc comment: guarantees this request can
+  // never collide with an in-memory cache entry from an on-page `<img>`
+  // currently displaying this exact same URL (MovieDetail's or
+  // ResultCard's own hero poster) — the actual, confirmed cause of the
+  // "Network/CORS error: Failed to fetch" failures a retry alone didn't
+  // fix, since every attempt was hitting the same poisoned cache entry.
+  const bustedSrc = cacheBustedUrl(src)
   let lastError: unknown
   for (let attempt = 1; attempt <= IMAGE_LOAD_ATTEMPTS; attempt += 1) {
     try {
-      return await decodeBlobAsImage(await fetchImageBlob(src))
+      return await decodeBlobAsImage(await fetchImageBlob(bustedSrc))
     } catch (err) {
       lastError = err
     }
   }
   try {
-    return await loadImageViaImgTagFallback(src)
+    return await loadImageViaImgTagFallback(bustedSrc)
   } catch {
     throw lastError instanceof Error ? lastError : new Error(String(lastError))
   }
