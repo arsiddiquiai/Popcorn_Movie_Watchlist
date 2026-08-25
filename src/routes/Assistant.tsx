@@ -149,14 +149,22 @@ export default function Assistant() {
     }
   }
 
+  // Live-review fix: this section used to be `flex-1` unconditionally,
+  // which stretched it to fill the rest of a `min-h-screen` container even
+  // with nothing in it — that's what pushed the input off-screen on first
+  // load. It only needs to grow/scroll once there's actually something to
+  // fill it with; empty, it should collapse to zero height so the intro
+  // text and input sit right next to each other near the top.
+  const hasContent = messages.length > 0 || sending || Boolean(cappedMessage) || Boolean(errorMessage)
+
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-2xl flex-col px-6 py-10 sm:px-10 sm:py-14">
+    <div className={`mx-auto flex w-full max-w-2xl flex-col px-6 py-10 sm:px-10 sm:py-14 ${hasContent ? 'min-h-screen' : ''}`}>
       <PageHeader
         title="Movie Assistant"
         subtitle={'Talk through what to watch — ask about a film, describe a mood, or say "add it" when something clicks.'}
       />
 
-      <div className="mt-10 flex flex-1 flex-col gap-4 overflow-y-auto">
+      <div className={`mt-10 flex flex-col gap-4 overflow-y-auto ${hasContent ? 'flex-1' : ''}`}>
         {messages.map((msg) => (
           <motion.div
             key={msg.id}
