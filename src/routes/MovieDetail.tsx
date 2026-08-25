@@ -341,9 +341,19 @@ export default function MovieDetail() {
       {/* Rating panel — a bottom sheet now instead of sitting inline in the
           page body (live-review redesign). RatingPanel itself is
           completely untouched: same save-on-release behaviour, same
-          cold->warm colour interpolation, same why-chips/review note. */}
+          cold->warm colour interpolation, same why-chips/review note.
+          Capped at 60vh (vs. the default ~85vh) so the reactive poster
+          hero stays visible above it while rating — the verdict word,
+          score, slider and pulse line all fit well within that; why-chips
+          and the review note (only shown after a first save) can scroll
+          if needed rather than force the sheet taller. */}
       {watchlistItem?.status === 'watched' && user && (
-        <BottomSheet open={ratingSheetOpen} onClose={() => setRatingSheetOpen(false)} title="Rate this film">
+        <BottomSheet
+          open={ratingSheetOpen}
+          onClose={() => setRatingSheetOpen(false)}
+          title="Rate this film"
+          maxHeightVh={60}
+        >
           <RatingPanel
             tmdbId={tmdbId}
             userId={user.id}

@@ -7,6 +7,11 @@ interface BottomSheetProps {
   onClose: () => void
   title?: string
   children: ReactNode
+  /** Caps the panel's height as a percentage of the viewport. Defaults to
+   *  85 (near-full-height, the common case). Movie Detail's rating sheet
+   *  passes something smaller so the reactive poster hero stays visible
+   *  above it while rating. */
+  maxHeightVh?: number
 }
 
 /**
@@ -18,7 +23,7 @@ interface BottomSheetProps {
  * the same backdrop+slide-panel recipe the old mobile nav drawer used
  * before DESIGN.md §4 removed it, so the pattern isn't new to this app.
  */
-export function BottomSheet({ open, onClose, title, children }: BottomSheetProps) {
+export function BottomSheet({ open, onClose, title, children, maxHeightVh = 85 }: BottomSheetProps) {
   const { reducedMotion } = useTheme()
 
   return (
@@ -39,8 +44,8 @@ export function BottomSheet({ open, onClose, title, children }: BottomSheetProps
         >
           <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden="true" />
           <motion.div
-            className="relative max-h-[85vh] w-full max-w-xl overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 shadow-[var(--shadow-lift)]"
-            style={{ paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
+            className="relative w-full max-w-xl overflow-y-auto rounded-t-2xl border-t border-border bg-surface p-5 shadow-[var(--shadow-lift)]"
+            style={{ maxHeight: `${maxHeightVh}vh`, paddingBottom: 'calc(1.5rem + env(safe-area-inset-bottom))' }}
             initial={reducedMotion ? false : { y: '100%' }}
             animate={{ y: 0 }}
             exit={reducedMotion ? undefined : { y: '100%' }}
