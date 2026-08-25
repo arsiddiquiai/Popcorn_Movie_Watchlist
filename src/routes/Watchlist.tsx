@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -55,6 +55,12 @@ export default function Watchlist() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [surprising, setSurprising] = useState(false)
   const [subcopySeen] = useState(hasSeenSubcopy)
+  // Whether the page's own h1 has scrolled up under the sticky app bar —
+  // DESIGN.md §3's "h1 collapses into the app bar on scroll". Tracked via
+  // IntersectionObserver against the header block itself rather than a
+  // raw scrollY threshold, so it stays correct regardless of header height.
+  const [compact, setCompact] = useState(false)
+  const headerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     try {
@@ -65,6 +71,20 @@ export default function Watchlist() {
   }, [])
 
   const showSubcopy = !subcopySeen || (status === 'success' && entries.length === 0)
+
+  useEffect(() => {
+    const el = headerRef.current
+    if (!el) return
+    // rootMargin's top offset matches the sticky app bar's own height
+    // (h-14 = 56px) — the header counts as "collapsed" once it scrolls
+    // up underneath the bar, not merely off the top of the viewport.
+    const observer = new IntersectionObserver(([entry]) => setCompact(!entry.isIntersecting), {
+      rootMargin: '-56px 0px 0px 0px',
+      threshold: 0,
+    })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   async function handleSurpriseMe() {
     if (surprising) return
@@ -80,16 +100,26 @@ export default function Watchlist() {
   // Mobile: Surprise Me moves off the page body and into the app bar as an
   // icon-button (DESIGN.md §3). Desktop keeps the labelled button below,
   // since the sidebar layout has no app bar for this slot to live in.
+  // The same slot also carries the collapsed title once `compact` flips —
+  // the app bar only has room for a short label next to the Logo, dice and
+  // hamburger, so it reads "Watchlist" rather than the full "My Watchlist".
   useAppBarAction(
-    <button
-      type="button"
-      onClick={() => void handleSurpriseMe()}
-      disabled={surprising}
-      aria-label={surprising ? 'Picking a surprise' : 'Surprise me'}
-      className="grid h-9 w-9 place-items-center rounded-lg text-accent-warm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/10 disabled:opacity-60"
-    >
-      <DiceIcon />
-    </button>,
+    <div className="flex items-center gap-2">
+      {compact && (
+        <span className="max-w-[110px] truncate font-display text-[17px] font-semibold text-text">
+          Watchlist
+        </span>
+      )}
+      <button
+        type="button"
+        onClick={() => void handleSurpriseMe()}
+        disabled={surprising}
+        aria-label={surprising ? 'Picking a surprise' : 'Surprise me'}
+        className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-accent-warm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/10 disabled:opacity-60"
+      >
+        <DiceIcon />
+      </button>
+    </div>,
   )
 
   useEffect(() => {
@@ -115,20 +145,25 @@ export default function Watchlist() {
 
   return (
     <Page width="wide">
-      <PageHeader
-        title="My Watchlist"
-        subtitle={showSubcopy ? "Everything you've saved — and everything quietly ageing out of it." : undefined}
-        actions={
-          <button
-            type="button"
-            onClick={() => void handleSurpriseMe()}
-            disabled={surprising}
-            className="hidden rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60 md:inline-flex"
-          >
-            {surprising ? 'Picking…' : 'Surprise Me'}
-          </button>
-        }
-      />
+      <div
+        ref={headerRef}
+        className={`transition-opacity duration-[var(--transition-fast)] ease-[var(--ease-standard)] md:opacity-100 ${compact ? 'opacity-0' : 'opacity-100'}`}
+      >
+        <PageHeader
+          title="My Watchlist"
+          subtitle={showSubcopy ? "Everything you've saved — and everything quietly ageing out of it." : undefined}
+          actions={
+            <button
+              type="button"
+              onClick={() => void handleSurpriseMe()}
+              disabled={surprising}
+              className="hidden rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60 md:inline-flex"
+            >
+              {surprising ? 'Picking…' : 'Surprise Me'}
+            </button>
+          }
+        />
+      </div>
 
       <div className="sticky top-14 z-30 -mt-4 flex flex-wrap items-center justify-between gap-3 bg-bg/80 py-2 backdrop-blur md:static md:bg-transparent md:py-0 md:backdrop-blur-none">
           <div className="inline-flex rounded-lg border border-border p-0.5">
