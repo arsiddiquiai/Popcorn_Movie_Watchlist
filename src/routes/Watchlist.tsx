@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { useAppBarAction } from '../components/layout/AppShell'
+import { DiceIcon } from '../components/layout/icons'
 import { KernelMark } from '../components/layout/Logo'
 import { Page, PageHeader } from '../components/layout/Page'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
@@ -31,19 +32,6 @@ function hasSeenSubcopy(): boolean {
   } catch {
     return false
   }
-}
-
-function DiceIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
-      <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-      <circle cx="8.25" cy="8.25" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="15.75" cy="8.25" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="8.25" cy="15.75" r="1.15" fill="currentColor" stroke="none" />
-      <circle cx="15.75" cy="15.75" r="1.15" fill="currentColor" stroke="none" />
-    </svg>
-  )
 }
 
 export default function Watchlist() {
@@ -101,8 +89,8 @@ export default function Watchlist() {
   // icon-button (DESIGN.md §3). Desktop keeps the labelled button below,
   // since the sidebar layout has no app bar for this slot to live in.
   // The same slot also carries the collapsed title once `compact` flips —
-  // the app bar only has room for a short label next to the Logo, dice and
-  // hamburger, so it reads "Watchlist" rather than the full "My Watchlist".
+  // the app bar only has room for a short label next to the Logo and dice,
+  // so it reads "Watchlist" rather than the full "My Watchlist".
   useAppBarAction(
     <div className="flex items-center gap-2">
       {compact && (
@@ -147,7 +135,7 @@ export default function Watchlist() {
     <Page width="wide">
       <div
         ref={headerRef}
-        className={`transition-opacity duration-[var(--transition-fast)] ease-[var(--ease-standard)] md:opacity-100 ${compact ? 'opacity-0' : 'opacity-100'}`}
+        className={`transition-opacity duration-[var(--transition-fast)] ease-[var(--ease-standard)] lg:opacity-100 ${compact ? 'opacity-0' : 'opacity-100'}`}
       >
         <PageHeader
           title="My Watchlist"
@@ -157,7 +145,7 @@ export default function Watchlist() {
               type="button"
               onClick={() => void handleSurpriseMe()}
               disabled={surprising}
-              className="hidden rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60 md:inline-flex"
+              className="hidden rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60 lg:inline-flex"
             >
               {surprising ? 'Picking…' : 'Surprise Me'}
             </button>
@@ -165,7 +153,7 @@ export default function Watchlist() {
         />
       </div>
 
-      <div className="sticky top-14 z-30 -mt-4 flex flex-wrap items-center justify-between gap-3 bg-bg/80 py-2 backdrop-blur md:static md:bg-transparent md:py-0 md:backdrop-blur-none">
+      <div className="sticky top-14 z-30 -mt-4 flex flex-wrap items-center justify-between gap-3 bg-bg/80 py-2 backdrop-blur lg:static lg:bg-transparent lg:py-0 lg:backdrop-blur-none">
           <div className="inline-flex rounded-lg border border-border p-0.5">
             {tabs.map((t) => (
               <button

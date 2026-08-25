@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { FilterBar, DEFAULT_ADVANCED_FILTERS, hasActiveAdvancedFilters, type AdvancedFilters } from '../components/search/FilterBar'
+import { DiscoverTabs } from '../components/layout/DiscoverTabs'
 import { Page, PageHeader } from '../components/layout/Page'
 import { LanguageChips } from '../components/search/LanguageChips'
 import { MovieRow } from '../components/search/MovieRow'
@@ -135,6 +136,8 @@ export default function Search() {
   return (
     <Page width="wide">
       <PageHeader title="Discover" subtitle="Search the catalogue, or browse by language and mood." />
+
+      <DiscoverTabs />
 
       <div className="-mt-4 w-full max-w-2xl">
         <input

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { Link } from 'react-router-dom'
+import { AccountLinks } from '../components/layout/AccountLinks'
 import { Spinner } from '../components/ui/Spinner'
 import { requestTaste, TasteError, type TasteResult } from '../lib/tasteClient'
 import { useTheme } from '../theme/ThemeProvider'
@@ -63,18 +64,23 @@ export default function TasteDNA() {
 
   if (phase === 'error') {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="max-w-md font-display text-xl text-text">That didn't load.</p>
-        <p className="max-w-md font-ui text-sm text-muted">{errorMessage}</p>
-        {retryable && (
-          <button
-            type="button"
-            onClick={() => void load()}
-            className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
-          >
-            Try again
-          </button>
-        )}
+      <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-6 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <p className="max-w-md font-display text-xl text-text">That didn't load.</p>
+          <p className="max-w-md font-ui text-sm text-muted">{errorMessage}</p>
+          {retryable && (
+            <button
+              type="button"
+              onClick={() => void load()}
+              className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
+            >
+              Try again
+            </button>
+          )}
+        </div>
+        <div className="w-full max-w-sm text-left">
+          <AccountLinks />
+        </div>
       </div>
     )
   }
@@ -83,17 +89,22 @@ export default function TasteDNA() {
 
   if (result.cold_start) {
     return (
-      <div className="flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center">
-        <h1 className="font-display text-3xl text-text">Taste DNA</h1>
-        <p className="max-w-md font-ui text-sm text-muted">
-          Rate a few more films and your taste profile will start taking shape — {result.total_rated}/5 so far.
-        </p>
-        <Link
-          to="/"
-          className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
-        >
-          Back to watchlist
-        </Link>
+      <div className="flex min-h-screen flex-col items-center justify-center gap-8 px-6 text-center">
+        <div className="flex flex-col items-center gap-4">
+          <h1 className="font-display text-3xl text-text">Taste DNA</h1>
+          <p className="max-w-md font-ui text-sm text-muted">
+            Rate a few more films and your taste profile will start taking shape — {result.total_rated}/5 so far.
+          </p>
+          <Link
+            to="/"
+            className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
+          >
+            Back to watchlist
+          </Link>
+        </div>
+        <div className="w-full max-w-sm text-left">
+          <AccountLinks />
+        </div>
       </div>
     )
   }
@@ -186,6 +197,8 @@ export default function TasteDNA() {
           </div>
         </section>
       )}
+
+      <AccountLinks />
     </div>
   )
 }

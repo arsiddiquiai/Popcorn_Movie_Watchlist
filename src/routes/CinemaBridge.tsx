@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { SourceMoviePicker } from '../components/bridge/SourceMoviePicker'
 import { TargetChips } from '../components/bridge/TargetChips'
+import { DiscoverTabs } from '../components/layout/DiscoverTabs'
 import type { MovieCache } from '../lib/database.types'
 import { BridgeError, requestBridge, type BridgeMatch, type BridgeResult } from '../lib/bridgeClient'
 import { formatRuntime } from '../lib/format'
@@ -98,6 +99,8 @@ export default function CinemaBridge() {
           Loved a film? Find its equivalent in another industry or language.
         </p>
       </div>
+
+      <DiscoverTabs />
 
       {(phase === 'form' || phase === 'loading') && (
         <form

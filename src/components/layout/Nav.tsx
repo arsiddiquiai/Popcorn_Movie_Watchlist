@@ -8,6 +8,9 @@ interface NavGroup {
   label: string
   accent: Accent
   items: { to: string; label: string }[]
+  /** Routes that belong to this territory for active-state purposes but
+   *  aren't rendered as their own nav link. */
+  territoryPaths?: string[]
 }
 
 export const groups: NavGroup[] = [
@@ -15,10 +18,15 @@ export const groups: NavGroup[] = [
     label: 'Discover',
     accent: 'accent-cold',
     items: [
+      // Cinema Bridge is reached via the segmented tab inside Search now
+      // (DESIGN.md §4) — it's a discovery mode, not its own destination,
+      // so it no longer gets a separate nav entry. /bridge still exists as
+      // a route (routes don't change) and still tints as Discover — see
+      // territoryPaths below — it's just not listed here.
       { to: '/search', label: 'Search' },
-      { to: '/bridge', label: 'Cinema Bridge' },
       { to: '/assistant', label: 'Movie Assistant' },
     ],
+    territoryPaths: ['/bridge'],
   },
   {
     label: 'Decide',
@@ -56,7 +64,8 @@ const accentStyles: Record<Accent, { bar: string; panelActive: string; panelInac
 }
 
 function isGroupActive(group: NavGroup, pathname: string) {
-  return group.items.some((item) => (item.to === '/' ? pathname === '/' : pathname.startsWith(item.to)))
+  const paths = [...group.items.map((item) => item.to), ...(group.territoryPaths ?? [])]
+  return paths.some((to) => (to === '/' ? pathname === '/' : pathname.startsWith(to)))
 }
 
 /**
@@ -75,12 +84,9 @@ export function getActiveMode(pathname: string): AppMode {
   return null
 }
 
-interface NavProps {
-  /** Called after a link is clicked — lets the mobile drawer close itself. */
-  onNavigate?: () => void
-}
-
-export function Nav({ onNavigate }: NavProps = {}) {
+// Desktop-sidebar-only (DESIGN.md §4) — the mobile drawer this used to also
+// serve is gone; the TabBar covers navigation below 1024px instead.
+export function Nav() {
   const { pathname } = useLocation()
   const { user, signOut } = useAuth()
   const activeGroup = groups.find((group) => isGroupActive(group, pathname))
@@ -118,7 +124,6 @@ export function Nav({ onNavigate }: NavProps = {}) {
                     <NavLink
                       to={item.to}
                       end={item.to === '/'}
-                      onClick={onNavigate}
                       className={({ isActive }) =>
                         `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                           isActive ? 'bg-bg font-semibold text-text' : 'text-muted hover:text-text'
@@ -140,7 +145,7 @@ export function Nav({ onNavigate }: NavProps = {}) {
           <li key={item.to}>
             <NavLink
               to={item.to}
-              onClick={onNavigate}
+              end
               className={({ isActive }) =>
                 `block rounded-lg px-2.5 py-2 font-ui text-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                   isActive ? 'text-text font-semibold' : 'text-muted hover:text-text'
@@ -154,11 +159,11 @@ export function Nav({ onNavigate }: NavProps = {}) {
       </ul>
 
       <div className="flex items-center gap-3 border-t border-border pt-4 font-ui text-[11px] text-muted-subtle">
-        <NavLink to="/privacy" onClick={onNavigate} className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
+        <NavLink to="/privacy" className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
           Privacy
         </NavLink>
         <span aria-hidden="true">·</span>
-        <NavLink to="/terms" onClick={onNavigate} className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
+        <NavLink to="/terms" className="transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-muted">
           Terms
         </NavLink>
       </div>
