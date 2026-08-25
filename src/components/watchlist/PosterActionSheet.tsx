@@ -2,16 +2,20 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BottomSheet } from '../ui/BottomSheet'
 import { shareMovie } from '../../lib/share'
-import type { WatchlistEntry } from '../../lib/watchlist'
 import type { WatchlistStatus } from '../../lib/database.types'
 
 interface PosterActionSheetProps {
   open: boolean
   onClose: () => void
-  entry: WatchlistEntry
-  status: WatchlistStatus
-  onMarkWatched: () => Promise<void>
-  onBury: () => Promise<void>
+  title: string
+  tmdbId: number
+  /** 'not_on_list' covers Search results, where the film isn't on the
+   *  watchlist at all yet — everything else is an existing
+   *  watchlist_items.status. */
+  status: WatchlistStatus | 'not_on_list'
+  onAdd?: () => Promise<void>
+  onMarkWatched?: () => Promise<void>
+  onBury?: () => Promise<void>
 }
 
 function Row({
@@ -46,44 +50,61 @@ function Row({
 }
 
 /**
- * Long-press (400ms) action sheet on any watchlist poster (DESIGN.md §5):
- * Add / Rate / Share / Bury. Every row here also has an ordinary tap
- * equivalent elsewhere in the app — this sheet is an accelerant, not a
- * second UI that only exists here:
- *   Add   — every card in this list is already on the watchlist by
- *           definition, so this slot shows that fact rather than a live
- *           action (matches SearchResultCard's own "Already on your
- *           list" state for the same situation).
+ * Long-press (400ms) action sheet on any poster (DESIGN.md §5): Add / Rate
+ * / Share / Bury. One shared component across every card variant —
+ * Watchlist's want/watched tabs and Search results — rather than a
+ * separate sheet per screen, with rows adapting to `status`:
+ *   Add   — the real action on Search results (not on the list yet).
+ *           On a watchlist card, every entry is already on the list by
+ *           definition, so this slot shows that fact instead (matches
+ *           SearchResultCard's own "Already on your list" button state).
  *   Rate  — only meaningful once watched (you can't rate an unwatched
- *           film); before that this slot is "Mark as Watched" instead,
- *           the same action swiping right already offers. Once watched,
- *           it opens Movie Detail, where the rating bottom sheet already
+ *           film); before that, and on Search results, this slot is
+ *           "Mark as Watched" / hidden respectively. Once watched, it
+ *           opens Movie Detail, where the rating bottom sheet already
  *           lives — not a second rating UI built here.
- *   Share — a plain movie link via the Web Share API (lib/share.ts).
- *   Bury  — identical to swiping left; Movie Detail's own "Remove from
- *           list" is the same action's third path.
+ *   Share — a plain movie link via the Web Share API (lib/share.ts),
+ *           available everywhere.
+ *   Bury  — identical to swiping left; not offered on Search results
+ *           (nothing to bury yet) or the Buried tab (already buried, use
+ *           its own visible Restore button instead).
  */
-export function PosterActionSheet({ open, onClose, entry, status, onMarkWatched, onBury }: PosterActionSheetProps) {
-  const { movie } = entry
+export function PosterActionSheet({ open, onClose, title, tmdbId, status, onAdd, onMarkWatched, onBury }: PosterActionSheetProps) {
+  const [addState, setAddState] = useState<'idle' | 'adding' | 'added'>('idle')
   const [shareState, setShareState] = useState<'idle' | 'sharing' | 'done'>('idle')
   const [busy, setBusy] = useState(false)
 
   async function handleShare() {
     if (shareState === 'sharing') return
     setShareState('sharing')
-    const outcome = await shareMovie(movie.title, movie.tmdb_id)
+    const outcome = await shareMovie(title, tmdbId)
     setShareState(outcome === 'failed' ? 'idle' : 'done')
     if (outcome !== 'failed') setTimeout(() => setShareState('idle'), 2000)
   }
 
-  return (
-    <BottomSheet open={open} onClose={onClose} title={movie.title}>
-      <div className="flex flex-col gap-1">
-        <Row label="Already on your list" tone="muted" disabled />
+  const onWatchlist = status === 'want' || status === 'watched'
 
-        {status === 'watched' ? (
-          <Row label="Rate this film" href={`/movie/${movie.tmdb_id}`} onClick={onClose} />
+  return (
+    <BottomSheet open={open} onClose={onClose} title={title}>
+      <div className="flex flex-col gap-1">
+        {status === 'not_on_list' ? (
+          <Row
+            label={addState === 'adding' ? 'Adding…' : addState === 'added' ? 'Added ✓' : 'Add to Watchlist'}
+            disabled={addState !== 'idle'}
+            onClick={() => {
+              if (!onAdd) return
+              setAddState('adding')
+              void onAdd()
+                .then(() => setAddState('added'))
+                .catch(() => setAddState('idle'))
+            }}
+          />
         ) : (
+          <Row label="Already on your list" tone="muted" disabled />
+        )}
+
+        {status === 'watched' && <Row label="Rate this film" href={`/movie/${tmdbId}`} onClick={onClose} />}
+        {status === 'want' && onMarkWatched && (
           <Row
             label="Mark as Watched"
             disabled={busy}
@@ -100,15 +121,22 @@ export function PosterActionSheet({ open, onClose, entry, status, onMarkWatched,
           onClick={() => void handleShare()}
         />
 
-        <Row
-          label="Bury"
-          tone="cold"
-          disabled={busy}
-          onClick={() => {
-            setBusy(true)
-            void onBury().finally(() => setBusy(false))
-          }}
-        />
+        {/* Gated on the handler actually being provided, not just status —
+            a reused context (Search results, once a film is added) may
+            not have a watchlist_items row id handy to bury by, and a
+            visible-but-silently-broken action is worse than not showing
+            it at all. */}
+        {onWatchlist && onBury && (
+          <Row
+            label="Bury"
+            tone="cold"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true)
+              void onBury().finally(() => setBusy(false))
+            }}
+          />
+        )}
       </div>
     </BottomSheet>
   )

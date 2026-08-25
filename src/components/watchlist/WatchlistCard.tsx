@@ -2,6 +2,8 @@ import { useRef, useState } from 'react'
 import { animate, useMotionValue, useTransform, motion, type PanInfo } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
+import { MoreIcon } from '../layout/icons'
+import { useLongPress } from '../ui/useLongPress'
 import { decayHairlineWidth, decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
 import { formatRuntime } from '../../lib/format'
 import { isFavoriteScore, mix, rgbString } from '../../lib/ratingScale'
@@ -75,9 +77,12 @@ interface WatchlistCardProps {
    *  Undefined/0 renders identically to the pre-decay card. */
   decayLevel?: number
   /** Whether this card sits on the decay shelf at all (the "want" tab) —
-   *  gates the hairline, the rescue-or-bury prompt, and the swipe/long-
-   *  press gestures below, none of which mean anything once a movie is
-   *  watched. */
+   *  gates the hairline, the rescue-or-bury prompt, and the swipe-to-
+   *  commit drag itself. Long-press and the "..." menu are NOT gated by
+   *  this — they're available on both want and watched cards, which is
+   *  exactly the bug report this fixed: long-press only worked where
+   *  dragging also did, because Framer's drag prop is what was silently
+   *  suppressing the OS's own image context menu. */
   decayEnabled?: boolean
   /** Called after "Keep it" or "Remove" succeeds, so the parent list can
    *  update its source-of-truth entries (new added_at, or drop the item). */
@@ -115,35 +120,21 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
     transition: reducedMotion ? undefined : 'filter var(--transition-slow) var(--ease-standard)',
   }
 
-  // Swipe + long-press (DESIGN.md §5) — both disabled while the rescue
-  // prompt is up (its own Keep/Remove buttons already cover the same
-  // ground for that state, and dragging the card away from under an open
-  // prompt would be confusing) or once a swipe/long-press is already
-  // mid-flight.
-  const gesturesActive = decayEnabled && !rescueEligible
+  // Swipe-to-commit only applies on the decay shelf (want tab); long-press
+  // applies everywhere a card isn't mid-rescue-prompt (DESIGN.md §5 — see
+  // the prop comment above for why these are no longer the same gate).
+  const swipeActive = decayEnabled && !rescueEligible
+  const longPressActive = !rescueEligible
   const x = useMotionValue(0)
   const rightRevealOpacity = useTransform(x, [0, SWIPE_DISTANCE_THRESHOLD], [0, 1])
   const leftRevealOpacity = useTransform(x, [-SWIPE_DISTANCE_THRESHOLD, 0], [1, 0])
   const draggedRef = useRef(false)
-  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [swiping, setSwiping] = useState(false)
 
-  function clearLongPressTimer() {
-    if (longPressTimer.current) {
-      clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-  }
-
-  function handlePointerDown() {
-    if (!gesturesActive || pending) return
-    clearLongPressTimer()
-    longPressTimer.current = setTimeout(() => {
-      longPressTimer.current = null
-      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8)
-      setSheetOpen(true)
-    }, 400)
-  }
+  const longPress = useLongPress({
+    disabled: !longPressActive || pending,
+    onLongPress: () => setSheetOpen(true),
+  })
 
   async function commitMarkWatched() {
     if (pending) return
@@ -263,6 +254,23 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
           </span>
         )}
 
+        {longPressActive && (
+          // Persistent, always-visible tap alternative to long-press
+          // (DESIGN.md §5) — doesn't depend on the gesture working at all.
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setSheetOpen(true)
+            }}
+            aria-label="More actions"
+            className="absolute left-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-bg/60 text-text backdrop-blur-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-bg/80"
+          >
+            <MoreIcon />
+          </button>
+        )}
+
         {rescueEligible && (
           // A full-height gradient scrim rather than the hard-edged strip this
           // used to be: a solid box pasted across the poster's bottom third was
@@ -316,8 +324,12 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
       </div>
 
       <div className="flex flex-col gap-1">
+        {/* min-h reserves 2 lines' worth of height regardless of the
+            actual title length, so a 1-line title next to a 2-line title
+            in the same grid row doesn't leave the badge/meta row below it
+            sitting at two different heights (live-review fix). */}
         <h3
-          className={`line-clamp-2 font-ui text-[13px] leading-[1.25] font-semibold transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${decayed ? 'text-muted' : 'text-text'}`}
+          className={`line-clamp-2 min-h-[2.5em] font-ui text-[13px] leading-[1.25] font-semibold transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${decayed ? 'text-muted' : 'text-text'}`}
           title={movie.title}
         >
           {movie.title}
@@ -335,14 +347,40 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
     </>
   )
 
-  if (!gesturesActive) {
+  const actionSheet = (
+    <PosterActionSheet
+      open={sheetOpen}
+      onClose={() => setSheetOpen(false)}
+      title={movie.title}
+      tmdbId={movie.tmdb_id}
+      status={item.status}
+      onMarkWatched={async () => {
+        await commitMarkWatched()
+        setSheetOpen(false)
+      }}
+      onBury={async () => {
+        await commitBury()
+        setSheetOpen(false)
+      }}
+    />
+  )
+
+  if (!swipeActive) {
     return (
-      <Link
-        to={`/movie/${movie.tmdb_id}`}
-        className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
-      >
-        {cardBody}
-      </Link>
+      <div className="relative">
+        <Link
+          to={`/movie/${movie.tmdb_id}`}
+          className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
+          style={longPress.touchCalloutStyle}
+          onClick={(event) => {
+            if (longPress.didFire()) event.preventDefault()
+          }}
+          {...longPress.handlers}
+        >
+          {cardBody}
+        </Link>
+        {actionSheet}
+      </div>
     )
   }
 
@@ -368,25 +406,23 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
 
       <motion.div
         drag="x"
-        style={{ x }}
+        style={{ x, ...longPress.touchCalloutStyle }}
         dragConstraints={{ left: 0, right: 0 }}
         dragElastic={1}
         dragMomentum={false}
-        onDragStart={clearLongPressTimer}
+        onDragStart={longPress.cancel}
         onDrag={(_e, info) => {
           draggedRef.current = Math.abs(info.offset.x) > 5
         }}
         onDragEnd={(e, info) => void handleDragEnd(e, info)}
-        onPointerDown={handlePointerDown}
-        onPointerUp={clearLongPressTimer}
-        onPointerCancel={clearLongPressTimer}
         className="relative bg-bg"
+        {...longPress.handlers}
       >
         <Link
           to={`/movie/${movie.tmdb_id}`}
           draggable={false}
           onClick={(event) => {
-            if (draggedRef.current || swiping) {
+            if (draggedRef.current || swiping || longPress.didFire()) {
               event.preventDefault()
               draggedRef.current = false
             }
@@ -397,20 +433,7 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
         </Link>
       </motion.div>
 
-      <PosterActionSheet
-        open={sheetOpen}
-        onClose={() => setSheetOpen(false)}
-        entry={entry}
-        status={item.status}
-        onMarkWatched={async () => {
-          await commitMarkWatched()
-          setSheetOpen(false)
-        }}
-        onBury={async () => {
-          await commitBury()
-          setSheetOpen(false)
-        }}
-      />
+      {actionSheet}
     </div>
   )
 }

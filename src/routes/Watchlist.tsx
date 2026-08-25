@@ -8,8 +8,10 @@ import { KernelMark } from '../components/layout/Logo'
 import { Page, PageHeader } from '../components/layout/Page'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
 import { PullToRefresh } from '../components/ui/PullToRefresh'
+import { BuriedCard } from '../components/watchlist/BuriedCard'
 import { UndoToast } from '../components/watchlist/UndoToast'
 import { WatchlistCard, type SwipeAction } from '../components/watchlist/WatchlistCard'
+import type { WatchlistStatus } from '../lib/database.types'
 import { decayLevelForAddedAt } from '../lib/decay'
 import { getRandomPopularMovie } from '../lib/tmdbClient'
 import { fetchWatchlistByStatus, type WatchlistEntry } from '../lib/watchlist'
@@ -17,11 +19,20 @@ import { useTheme } from '../theme/ThemeProvider'
 
 const UNDO_WINDOW_MS = 5000
 
-type Tab = 'want' | 'watched'
+// 'buried' is a UI-only tab id — the actual watchlist_items.status value it
+// queries is 'dropped' (see TAB_STATUS below). Buried items previously had
+// no screen at all: swiping/burying set status='dropped', but only 'want'
+// and 'watched' were ever queried, so a buried movie became permanently
+// invisible — not addable again (a dropped row already exists for that
+// tmdb_id) and not visible anywhere (live-review fix).
+type Tab = 'want' | 'watched' | 'buried'
+
+const TAB_STATUS: Record<Tab, WatchlistStatus> = { want: 'want', watched: 'watched', buried: 'dropped' }
 
 const tabs: { id: Tab; label: string }[] = [
   { id: 'want', label: 'Want to Watch' },
   { id: 'watched', label: 'Watched' },
+  { id: 'buried', label: 'Buried' },
 ]
 
 /** Session-only "have they seen this before" flag (same reasoning as the
@@ -129,7 +140,7 @@ export default function Watchlist() {
       if (!user) return
       if (!silent) setStatus('loading')
       try {
-        const result = await fetchWatchlistByStatus(user.id, tab)
+        const result = await fetchWatchlistByStatus(user.id, TAB_STATUS[tab])
         setEntries(result)
         setStatus('success')
       } catch {
@@ -257,7 +268,7 @@ export default function Watchlist() {
               <KernelMark size={34} fill="var(--muted-subtle)" />
             </motion.div>
 
-            {tab === 'want' ? (
+            {tab === 'want' && (
               <>
                 <div>
                   <p className="font-display text-xl font-semibold text-text">Nothing queued yet</p>
@@ -269,9 +280,15 @@ export default function Watchlist() {
                   Search movies
                 </Link>
               </>
-            ) : (
+            )}
+            {tab === 'watched' && (
               <p className="max-w-sm font-ui text-sm text-muted">
                 Nothing watched yet — movies you mark as watched will show up here.
+              </p>
+            )}
+            {tab === 'buried' && (
+              <p className="max-w-sm font-ui text-sm text-muted">
+                Nothing buried — movies you swipe away or remove show up here, and can always come back.
               </p>
             )}
           </div>
@@ -290,25 +307,32 @@ export default function Watchlist() {
                 variants={reducedMotion ? undefined : { hidden: { opacity: 0, y: 18 }, visible: { opacity: 1, y: 0 } }}
                 transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
               >
-                <WatchlistCard
-                  entry={entry}
-                  // Decay only applies to "want" items — watched/dropped
-                  // never decay, per spec.
-                  decayEnabled={tab === 'want'}
-                  decayLevel={tab === 'want' ? decayLevelForAddedAt(entry.item.added_at) : 0}
-                  onDecayResolved={(itemId, action, newAddedAt) => {
-                    setEntries((prev) =>
-                      action === 'removed'
-                        ? prev.filter((e) => e.item.id !== itemId)
-                        : prev.map((e) =>
-                            e.item.id === itemId && newAddedAt
-                              ? { ...e, item: { ...e.item, added_at: newAddedAt } }
-                              : e,
-                          ),
-                    )
-                  }}
-                  onSwipeAction={handleSwipeAction}
-                />
+                {tab === 'buried' ? (
+                  <BuriedCard
+                    entry={entry}
+                    onRestored={(itemId) => setEntries((prev) => prev.filter((e) => e.item.id !== itemId))}
+                  />
+                ) : (
+                  <WatchlistCard
+                    entry={entry}
+                    // Decay only applies to "want" items — watched items
+                    // never decay, per spec.
+                    decayEnabled={tab === 'want'}
+                    decayLevel={tab === 'want' ? decayLevelForAddedAt(entry.item.added_at) : 0}
+                    onDecayResolved={(itemId, action, newAddedAt) => {
+                      setEntries((prev) =>
+                        action === 'removed'
+                          ? prev.filter((e) => e.item.id !== itemId)
+                          : prev.map((e) =>
+                              e.item.id === itemId && newAddedAt
+                                ? { ...e, item: { ...e.item, added_at: newAddedAt } }
+                                : e,
+                            ),
+                      )
+                    }}
+                    onSwipeAction={handleSwipeAction}
+                  />
+                )}
               </motion.div>
             ))}
           </motion.div>

@@ -2,6 +2,9 @@ import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthProvider'
+import { MoreIcon } from '../layout/icons'
+import { PosterActionSheet } from '../watchlist/PosterActionSheet'
+import { useLongPress } from '../ui/useLongPress'
 import { posterLayoutId } from '../../lib/sharedElement'
 import { tmdbImageUrl, type TmdbSearchMovie } from '../../lib/tmdbClient'
 import { addToWatchlist } from '../../lib/watchlist'
@@ -15,6 +18,7 @@ function releaseYear(releaseDate: string): string {
 export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
   const { user } = useAuth()
   const [state, setState] = useState<AddState>('idle')
+  const [sheetOpen, setSheetOpen] = useState(false)
   const posterUrl = tmdbImageUrl(movie.poster_path, 'w342')
 
   async function handleAdd() {
@@ -28,6 +32,11 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
     }
   }
 
+  // Long-press (DESIGN.md §5) was entirely missing here before — this card
+  // had no drag prop anywhere, so nothing suppressed the OS's own image
+  // context menu (see useLongPress's own comment for why that mattered).
+  const longPress = useLongPress({ onLongPress: () => setSheetOpen(true) })
+
   return (
     <div className="flex flex-col gap-3">
       {/* Previously a plain div with no way to reach Movie Detail at all —
@@ -37,6 +46,11 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
       <Link
         to={`/movie/${movie.id}`}
         className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
+        style={longPress.touchCalloutStyle}
+        onClick={(event) => {
+          if (longPress.didFire()) event.preventDefault()
+        }}
+        {...longPress.handlers}
       >
         {/* Border/radius/shadow brought in line with WatchlistCard's density
             pass (DESIGN.md §3) — this card was missed at the time (QA
@@ -61,10 +75,28 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
               {movie.vote_average.toFixed(1)}
             </span>
           )}
+
+          {/* Persistent, always-visible tap alternative to long-press
+              (DESIGN.md §5) — doesn't depend on the gesture working. */}
+          <button
+            type="button"
+            onClick={(event) => {
+              event.preventDefault()
+              event.stopPropagation()
+              setSheetOpen(true)
+            }}
+            aria-label="More actions"
+            className="absolute left-2 top-2 grid h-7 w-7 place-items-center rounded-full bg-bg/60 text-text backdrop-blur-sm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-bg/80"
+          >
+            <MoreIcon />
+          </button>
         </div>
 
         <div className="flex flex-col gap-1">
-          <h3 className="line-clamp-2 font-ui text-[13px] leading-[1.25] font-semibold text-text" title={movie.title}>
+          {/* min-h reserves 2 lines regardless of actual title length, so
+              badges/actions stay aligned across a grid row (live-review
+              fix) — same treatment as WatchlistCard's title. */}
+          <h3 className="line-clamp-2 min-h-[2.5em] font-ui text-[13px] leading-[1.25] font-semibold text-text" title={movie.title}>
             {movie.title}
           </h3>
           <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-subtle">
@@ -74,6 +106,17 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
       </Link>
 
       <AddButton state={state} onClick={handleAdd} />
+
+      <PosterActionSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        title={movie.title}
+        tmdbId={movie.id}
+        status={state === 'added' || state === 'already' ? 'want' : 'not_on_list'}
+        onAdd={async () => {
+          await handleAdd()
+        }}
+      />
     </div>
   )
 }

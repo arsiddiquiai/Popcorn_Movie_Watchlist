@@ -80,3 +80,17 @@ export function RefreshIcon() {
     </svg>
   )
 }
+
+/** The persistent, always-visible tap alternative to long-press (DESIGN.md
+ *  §5 — every gesture needs a non-gesture equivalent that doesn't depend
+ *  on the gesture itself working). Opens the same PosterActionSheet a
+ *  successful long-press does. */
+export function MoreIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <circle cx="5" cy="12" r="2" />
+      <circle cx="12" cy="12" r="2" />
+      <circle cx="19" cy="12" r="2" />
+    </svg>
+  )
+}
