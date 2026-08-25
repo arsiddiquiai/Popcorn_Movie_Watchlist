@@ -343,20 +343,40 @@ export async function renderSingleMovieCard(
 
   // One large poster — the point of this card. Cropped to a fixed 2:3
   // (TMDB's own poster ratio) so a portrait source image never distorts.
+  //
+  // BUG FIX: this used to size the poster purely from the available WIDTH
+  // (full margin-to-margin, times 1.5 for the 2:3 ratio) with no regard for
+  // how much canvas HEIGHT was actually left afterward. At full width that
+  // poster is 1428px tall — on the default 'story' canvas (1920px) that
+  // left title/tagline/footer starting past y=1968, off the bottom of a
+  // 1920px canvas entirely (and far worse on 'classic', 1440px). They were
+  // being drawn, just outside the canvas — invisible, which read as "the
+  // card is blank" even though the poster itself mostly fit. Fixed by
+  // capping the poster's height to whatever room is actually left after
+  // reserving fixed space for two title lines + tagline + footer, and
+  // narrowing (not stretching) the poster width to match — still a true
+  // 2:3 crop, just smaller and centered, never distorted.
   const posterTop = eyebrowY + 28
-  const posterW = WIDTH - marginX * 2
-  const posterH = posterW * 1.5
+  const fullWidthPosterW = WIDTH - marginX * 2
+  // Two title lines (lineHeight below) + gap + tagline + gap + footer
+  // (divider + two lines) + a bottom safety margin.
+  const RESERVED_BELOW_POSTER = 2 * 58 + 48 + 40 + 80 + 40
+  const maxPosterH = canvas.height - posterTop - RESERVED_BELOW_POSTER
+  const posterH = Math.min(fullWidthPosterW * 1.5, Math.max(maxPosterH, 200))
+  const posterW = posterH / 1.5
+  const posterX = marginX + (fullWidthPosterW - posterW) / 2
   try {
     const img = await loadImage(poster.url)
     ctx.save()
-    roundedRectPath(ctx, marginX, posterTop, posterW, posterH, POSTER_RADIUS)
+    roundedRectPath(ctx, posterX, posterTop, posterW, posterH, POSTER_RADIUS)
     ctx.clip()
-    ctx.drawImage(img, marginX, posterTop, posterW, posterH)
+    ctx.drawImage(img, posterX, posterTop, posterW, posterH)
     ctx.restore()
-  } catch {
+  } catch (err) {
+    console.error('Single-movie card: poster image failed to load, drawing a placeholder instead:', err)
     // No poster image reachable — draw a plain themed panel with the title
     // so the card still renders something coherent rather than failing.
-    roundedRectPath(ctx, marginX, posterTop, posterW, posterH, POSTER_RADIUS)
+    roundedRectPath(ctx, posterX, posterTop, posterW, posterH, POSTER_RADIUS)
     ctx.fillStyle = theme.surface
     ctx.fill()
   }
@@ -406,6 +426,19 @@ export type ShareCardOutcome = 'shared' | 'downloaded' | 'cancelled' | 'failed'
  * back to triggering a browser download when navigator.share/canShare
  * isn't available or doesn't accept files (desktop Safari/Firefox, most
  * desktop browsers generally).
+ *
+ * A silent fall-through to download also happens on a THIRD case that
+ * isn't about capability at all: navigator.share() requires an active
+ * "user activation" from the click that started this whole async chain,
+ * and Chromium's activation window is a fixed ~5s from that click — not
+ * from whenever this function happens to run. On a real device this threw
+ * NotAllowedError (not AbortError) whenever the caller's own async work
+ * (watchlist fetch, share-token creation, an AI verdict call, poster image
+ * loads) ate enough of that budget, and the error was being swallowed here
+ * with no logging at all — which is exactly why it looked like "share is
+ * just downloading instead" with nothing to go on. Now logged by name, and
+ * see ShareWatchlistCard.tsx's handleShare for the actual latency fix
+ * (parallelizing + capping the slow steps so this budget isn't blown).
  */
 export async function shareOrDownloadCard(
   blob: Blob,
@@ -426,8 +459,14 @@ export async function shareOrDownloadCard(
         return 'shared'
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled'
+        console.error(
+          'navigator.share() failed, falling back to download:',
+          err instanceof DOMException ? `${err.name}: ${err.message}` : err,
+        )
         // Fall through to download rather than reporting failure outright.
       }
+    } else {
+      console.error('navigator.canShare({files}) returned false — falling back to download.')
     }
   }
 

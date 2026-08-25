@@ -20,6 +20,19 @@ import { useTheme } from '../../theme/ThemeProvider'
 // apart if either changes.
 const POSTER_COUNT = 6
 
+/**
+ * navigator.share() needs the click's "user activation" to still be live
+ * when it's finally called (Chromium's window is a fixed ~5s from the
+ * click, not from whenever this async chain happens to reach share() — see
+ * shareCard.ts's shareOrDownloadCard doc comment for the bug this caused).
+ * The verdict call (mode:'verdict', an AI request on a cache miss) is by
+ * far the slowest step in this chain, so it's capped hard rather than left
+ * to run as long as the network allows — a verdict is decorative and the
+ * card is already fully valid without it, so timing out and proceeding is
+ * strictly better than risking the whole share failing over one AI call.
+ */
+const VERDICT_TIMEOUT_MS = 3_500
+
 type State = 'idle' | 'working' | 'error'
 type CardType = 'watchlist' | 'buried'
 
@@ -56,6 +69,23 @@ function cardTitle(displayName: unknown): string {
  *  restored quickly"), so that's what this uses — zero schema risk, and it
  *  reuses the Decay Shelf's own already-tuned threshold rather than
  *  inventing a new one. */
+/** Best-effort, time-boxed verdict fetch — see VERDICT_TIMEOUT_MS above.
+ *  Never throws: a timeout or any other failure just means no verdict line
+ *  this time, exactly like every other failure path here. */
+async function requestVerdictWithTimeout(): Promise<string | null> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), VERDICT_TIMEOUT_MS)
+  try {
+    const result = await requestVerdict(controller.signal)
+    return result.verdict_text
+  } catch (err) {
+    console.error('Could not generate a verdict line (timed out or failed):', err)
+    return null
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 function findMostBuried(wantEntries: WatchlistEntry[]): WatchlistEntry[] {
   return wantEntries
     .filter((entry) => entry.movie.poster_path && decayLevelForAddedAt(entry.item.added_at) >= DECAY_RESCUE_THRESHOLD)
@@ -143,22 +173,25 @@ export function ShareWatchlistCard() {
         title = cardTitle(user.user_metadata?.display_name)
         badge = computeTasteBadge(source.map((entry) => entry.movie.genres))
 
-        try {
-          const token = await getOrCreateShareToken()
-          shareUrl = shareUrlFor(token)
-        } catch (err) {
-          console.error('Could not create a share link:', err)
-          // The image card is still useful on its own — a failed link
-          // shouldn't block generating it.
-        }
-
-        try {
-          const result = await requestVerdict()
-          verdict = result.verdict_text
-        } catch (err) {
-          console.error('Could not generate a verdict line:', err)
-          // Decorative — the card is still complete without it.
-        }
+        // Run together, not sequentially — every extra awaited round-trip
+        // between the click and the eventual navigator.share() call eats
+        // into the same fixed user-activation window (see
+        // VERDICT_TIMEOUT_MS's doc comment above). Two independent network
+        // calls run in parallel cost roughly as much wall-clock time as the
+        // slower one alone, instead of both added together.
+        const [tokenOutcome, verdictText] = await Promise.all([
+          getOrCreateShareToken()
+            .then((token) => shareUrlFor(token))
+            .catch((err) => {
+              console.error('Could not create a share link:', err)
+              // The image card is still useful on its own — a failed link
+              // shouldn't block generating it.
+              return undefined
+            }),
+          requestVerdictWithTimeout(),
+        ])
+        shareUrl = tokenOutcome
+        verdict = verdictText
       }
 
       const blob = await renderShareCard(posters, readShareCardTheme(), title, statLine, shareUrl, verdict, badge, aspect)
