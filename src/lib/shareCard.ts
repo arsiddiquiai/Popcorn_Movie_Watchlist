@@ -81,12 +81,21 @@ const POSTER_RADIUS = 22
 const KERNEL_PATH =
   'M13.5 4.2c-2.1.4-3.6 2-3.6 3.9 0 .5.1.9.3 1.3-2.5.7-4.3 2.6-4.3 4.9 0 .9.3 1.7.8 2.4L5.1 26.1c-.1.9.6 1.7 1.6 1.7h1.9l1-9.4a1 1 0 0 1 2 .2l-1 9.2h2.2l.6-9.6a1 1 0 0 1 2 .1l-.6 9.5h2.1l-.2-9.6a1 1 0 0 1 2-.1l.3 9.7h2l-1-9.4a1 1 0 0 1 2-.2l1 9.6h1.8c1 0 1.7-.8 1.6-1.7l-1.6-9.4c.5-.7.8-1.5.8-2.4 0-2.3-1.8-4.2-4.3-4.9.2-.4.3-.8.3-1.3 0-2.1-1.9-3.8-4.3-3.8-1 0-2 .3-2.7.9-.6-.5-1.5-.8-2.4-.8Z'
 
-/** 8s: generous for a poster image on a normal connection, but a hard
- *  ceiling so one slow/hanging load can never stall the whole card
- *  indefinitely — without this, a poster that never fires onload/onerror
- *  (a stalled request, not just a failed one) would leave the "Making…"
- *  button spinning forever with nothing to show and nothing logged. */
+/** 8s total budget for a poster load, split across two fetch() attempts
+ *  (see IMAGE_LOAD_ATTEMPTS) plus a final <img>-tag fallback — a hard
+ *  ceiling so a slow/hanging load can never stall the whole card
+ *  indefinitely, without this, a poster that never resolves would leave
+ *  the "Making…" button spinning forever with nothing to show. */
 const IMAGE_LOAD_TIMEOUT_MS = 8_000
+/** Real-device testing (see loadImage's own doc comment) showed a single
+ *  fetch() attempt failing with a bare "Failed to fetch" TypeError — the
+ *  generic signature of a transient mobile-network blip — for a poster
+ *  loaded on its own (a single-movie card), while a grid of 6 posters
+ *  loaded moments earlier in the same session succeeded outright. One
+ *  retry is cheap and matches the pattern api/ai.ts's tmdbGetJson already
+ *  uses for the exact same class of intermittent connection reset. */
+const IMAGE_LOAD_ATTEMPTS = 2
+const IMAGE_LOAD_ATTEMPT_TIMEOUT_MS = IMAGE_LOAD_TIMEOUT_MS / IMAGE_LOAD_ATTEMPTS
 
 /**
  * TEMPORARY DIAGNOSTIC — safe to delete once real-device poster-load
@@ -102,62 +111,118 @@ const IMAGE_LOAD_TIMEOUT_MS = 8_000
  */
 export const DEBUG_POSTER_FAILURES_ON_CARD = true
 
-/**
- * Loads an image via fetch() + an object URL rather than setting `<img
- * crossorigin src>` directly. Two real reasons, not just style:
- *
- * 1. Diagnosis. An <img>'s onerror event carries NO detail at all — a 404,
- *    a CORS block, and a genuine network failure all fire the identical
- *    bare "error" event, which is exactly why the previous version's
- *    console.error could only ever say "Failed to load <url>" and nothing
- *    about WHY. fetch()'s Response exposes the real HTTP status on a
- *    non-2xx, and a network/CORS failure throws a distinguishable
- *    TypeError — actual signal instead of a shrug.
- * 2. Safety. A blob: URL is always same-origin, so there is no tainted-
- *    canvas risk at all (previously relied on TMDB's CDN choosing to keep
- *    sending permissive CORS headers) — canvas.toBlob() can never fail for
- *    that reason with this approach, regardless of what any CDN does.
- */
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return (async () => {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), IMAGE_LOAD_TIMEOUT_MS)
-    let response: Response
-    try {
-      response = await fetch(src, { signal: controller.signal, mode: 'cors' })
-    } catch (err) {
-      if (err instanceof DOMException && err.name === 'AbortError') {
-        throw new Error(`Timed out after ${IMAGE_LOAD_TIMEOUT_MS / 1000}s`)
-      }
+/** One fetch() attempt: a real HTTP status on a non-2xx, and a
+ *  distinguishable timeout vs. network/CORS TypeError on failure — see
+ *  loadImage's own doc comment for why this replaced a plain `<img
+ *  crossorigin src>` in the first place. */
+async function fetchImageBlob(src: string): Promise<Blob> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), IMAGE_LOAD_ATTEMPT_TIMEOUT_MS)
+  try {
+    const response = await fetch(src, { signal: controller.signal, mode: 'cors' })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    return await response.blob()
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`Timed out after ${IMAGE_LOAD_ATTEMPT_TIMEOUT_MS / 1000}s`)
+    }
+    if (err instanceof TypeError) {
       // The Fetch spec deliberately doesn't distinguish "blocked by CORS"
       // from "genuine network failure" in the TypeError it throws (that
       // distinction would itself leak cross-origin information) — this is
       // as precise as the platform allows, but it's still real signal:
       // narrows the cause to "never got a response at all", ruling out a
       // bad/missing poster (which would show as an HTTP status instead).
-      throw new Error(`Network/CORS error: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      clearTimeout(timer)
+      throw new Error(`Network/CORS error: ${err.message}`)
     }
-    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    throw err
+  } finally {
+    clearTimeout(timer)
+  }
+}
 
-    const blob = await response.blob()
-    const objectUrl = URL.createObjectURL(blob)
-    try {
-      return await new Promise<HTMLImageElement>((resolve, reject) => {
-        const img = new Image()
-        img.onload = () => resolve(img)
-        img.onerror = () => reject(new Error('Downloaded but failed to decode as an image'))
-        img.src = objectUrl
-      })
-    } finally {
-      // The Image has its own decoded bitmap once loaded, so the object
-      // URL is safe to revoke right after — no delayed revoke needed here
-      // (unlike shareOrDownloadCard's download link, which a browser may
-      // still be reading from asynchronously after click()).
-      URL.revokeObjectURL(objectUrl)
+function decodeBlobAsImage(blob: Blob): Promise<HTMLImageElement> {
+  const objectUrl = URL.createObjectURL(blob)
+  const decode = new Promise<HTMLImageElement>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Downloaded but failed to decode as an image'))
+    img.src = objectUrl
+  })
+  // The Image has its own decoded bitmap once onload fires, so the object
+  // URL is safe to revoke as soon as the promise settles either way — no
+  // delayed revoke needed here (unlike shareOrDownloadCard's download
+  // link, which a browser may still be reading from asynchronously after
+  // click()).
+  return decode.finally(() => URL.revokeObjectURL(objectUrl))
+}
+
+/** Last-resort fallback after every fetch() attempt has failed: a plain
+ *  `<img crossorigin src>` load. Worth trying on its own merits, not just
+ *  as a formality — it has different failure characteristics than a
+ *  strict CORS-mode fetch() (notably, it can be served straight from the
+ *  browser's own HTTP image cache even when a fresh network request hit a
+ *  transient blip), so it can succeed in exactly the case that motivated
+ *  this whole retry chain. Whatever this raises is discarded by the
+ *  caller in favour of the original fetch() failure reason, which is more
+ *  diagnostic (an HTTP status or a distinguishable timeout/network error,
+ *  vs. this path's single opaque "error" event).
+ */
+function loadImageViaImgTagFallback(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.crossOrigin = 'anonymous'
+    const timer = setTimeout(() => reject(new Error('<img> fallback timed out')), IMAGE_LOAD_ATTEMPT_TIMEOUT_MS)
+    img.onload = () => {
+      clearTimeout(timer)
+      resolve(img)
     }
-  })()
+    img.onerror = () => {
+      clearTimeout(timer)
+      reject(new Error('<img> fallback also failed'))
+    }
+    img.src = src
+  })
+}
+
+/**
+ * Loads an image via fetch() + an object URL rather than setting `<img
+ * crossorigin src>` directly, retrying once, then falling back to the
+ * `<img>` approach as a last resort. Two real reasons for fetch() first,
+ * not just style:
+ *
+ * 1. Diagnosis. An <img>'s onerror event carries NO detail at all — a 404,
+ *    a CORS block, and a genuine network failure all fire the identical
+ *    bare "error" event, which is exactly why an earlier version's
+ *    console.error could only ever say "Failed to load <url>" and nothing
+ *    about WHY. fetch()'s Response exposes the real HTTP status on a
+ *    non-2xx, and a network/CORS failure throws a distinguishable
+ *    TypeError — actual signal instead of a shrug.
+ * 2. Safety. A blob: URL is always same-origin, so there is no tainted-
+ *    canvas risk at all (a plain `<img crossorigin>` load relies on TMDB's
+ *    CDN choosing to keep sending permissive CORS headers) — canvas.
+ *    toBlob() can never fail for that reason on the fetch() path.
+ *
+ * The retry + <img> fallback exist because real-device testing showed
+ * fetch() alone failing with "Failed to fetch" (a transient network blip,
+ * not a genuine block — see IMAGE_LOAD_ATTEMPTS' own comment) for a
+ * single-movie card's one poster load, moments after a 6-poster grid
+ * succeeded outright in the same session.
+ */
+async function loadImage(src: string): Promise<HTMLImageElement> {
+  let lastError: unknown
+  for (let attempt = 1; attempt <= IMAGE_LOAD_ATTEMPTS; attempt += 1) {
+    try {
+      return await decodeBlobAsImage(await fetchImageBlob(src))
+    } catch (err) {
+      lastError = err
+    }
+  }
+  try {
+    return await loadImageViaImgTagFallback(src)
+  } catch {
+    throw lastError instanceof Error ? lastError : new Error(String(lastError))
+  }
 }
 
 /**
