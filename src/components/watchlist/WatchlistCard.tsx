@@ -1,14 +1,16 @@
-import { useState } from 'react'
-import { motion } from 'framer-motion'
+import { useRef, useState } from 'react'
+import { animate, useMotionValue, useTransform, motion, type PanInfo } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthProvider'
 import { decayHairlineWidth, decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
 import { formatRuntime } from '../../lib/format'
 import { isFavoriteScore, mix, rgbString } from '../../lib/ratingScale'
 import { posterLayoutId } from '../../lib/sharedElement'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import type { WatchlistEntry } from '../../lib/watchlist'
-import { refreshAddedAt, removeFromWatchlist } from '../../lib/watchlist'
+import { addToWatchlist, markAsWatched, refreshAddedAt, removeFromWatchlist, unmarkWatched } from '../../lib/watchlist'
 import { useTheme } from '../../theme/ThemeProvider'
+import { PosterActionSheet } from './PosterActionSheet'
 import { useDecayColors } from './useDecayColors'
 
 /** Session-only dismissal for the rescue-or-bury prompt — "don't be naggy"
@@ -34,28 +36,66 @@ function dismiss(itemId: string): void {
   }
 }
 
+// DESIGN.md §5: "Threshold 88px or velocity > 0.4." Framer's PanInfo
+// velocity is px/second, and 0.4 read as px/ms (the usual convention for a
+// "flick" threshold in gesture libraries) is 400px/s.
+const SWIPE_DISTANCE_THRESHOLD = 88
+const SWIPE_VELOCITY_THRESHOLD = 400
+const EASE_STANDARD = [0.22, 1, 0.36, 1] as const
+
+function CheckIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M5 12.5l4.5 4.5L19 7" />
+    </svg>
+  )
+}
+
+function BuryIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--bg)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M12 4v13M6 12l6 6 6-6" />
+    </svg>
+  )
+}
+
+/** What WatchlistCard reports up after a committed swipe or long-press
+ *  action, so the parent list can optimistically remove the entry and run
+ *  the 5s undo toast (DESIGN.md §5) — one shared shape for both gesture
+ *  paths rather than two. */
+export interface SwipeAction {
+  entry: WatchlistEntry
+  kind: 'watched' | 'buried'
+  revert: () => Promise<void>
+}
+
 interface WatchlistCardProps {
   entry: WatchlistEntry
   /** 0 (fresh) to 1 (fully decayed) — only meaningful when decayEnabled.
    *  Undefined/0 renders identically to the pre-decay card. */
   decayLevel?: number
   /** Whether this card sits on the decay shelf at all (the "want" tab) —
-   *  gates the hairline and the rescue-or-bury prompt, neither of which
-   *  mean anything once a movie is watched. */
+   *  gates the hairline, the rescue-or-bury prompt, and the swipe/long-
+   *  press gestures below, none of which mean anything once a movie is
+   *  watched. */
   decayEnabled?: boolean
   /** Called after "Keep it" or "Remove" succeeds, so the parent list can
    *  update its source-of-truth entries (new added_at, or drop the item). */
   onDecayResolved?: (itemId: string, action: 'kept' | 'removed', newAddedAt?: string) => void
+  /** Called after a swipe or long-press action commits — see SwipeAction. */
+  onSwipeAction?: (action: SwipeAction) => void
 }
 
-export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onDecayResolved }: WatchlistCardProps) {
+export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onDecayResolved, onSwipeAction }: WatchlistCardProps) {
   const { movie, score, item } = entry
+  const { user } = useAuth()
   const posterUrl = tmdbImageUrl(movie.poster_path, 'w342')
   const runtime = formatRuntime(movie.runtime_minutes)
   const { reducedMotion } = useTheme()
   const decayColors = useDecayColors()
   const [pending, setPending] = useState(false)
   const [dismissed, setDismissed] = useState(() => isDismissed(item.id))
+  const [sheetOpen, setSheetOpen] = useState(false)
 
   const decayed = decayEnabled && decayLevel > 0
   const rescueEligible = decayEnabled && decayLevel >= DECAY_RESCUE_THRESHOLD && !dismissed
@@ -73,6 +113,87 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
   const posterStyle = {
     ...decayPosterStyle(decayLevel),
     transition: reducedMotion ? undefined : 'filter var(--transition-slow) var(--ease-standard)',
+  }
+
+  // Swipe + long-press (DESIGN.md §5) — both disabled while the rescue
+  // prompt is up (its own Keep/Remove buttons already cover the same
+  // ground for that state, and dragging the card away from under an open
+  // prompt would be confusing) or once a swipe/long-press is already
+  // mid-flight.
+  const gesturesActive = decayEnabled && !rescueEligible
+  const x = useMotionValue(0)
+  const rightRevealOpacity = useTransform(x, [0, SWIPE_DISTANCE_THRESHOLD], [0, 1])
+  const leftRevealOpacity = useTransform(x, [-SWIPE_DISTANCE_THRESHOLD, 0], [1, 0])
+  const draggedRef = useRef(false)
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [swiping, setSwiping] = useState(false)
+
+  function clearLongPressTimer() {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+    }
+  }
+
+  function handlePointerDown() {
+    if (!gesturesActive || pending) return
+    clearLongPressTimer()
+    longPressTimer.current = setTimeout(() => {
+      longPressTimer.current = null
+      if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(8)
+      setSheetOpen(true)
+    }, 400)
+  }
+
+  async function commitMarkWatched() {
+    if (pending) return
+    setPending(true)
+    try {
+      await markAsWatched(item.id)
+      onSwipeAction?.({ entry, kind: 'watched', revert: () => unmarkWatched(item.id) })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function commitBury() {
+    if (pending || !user) return
+    setPending(true)
+    try {
+      await removeFromWatchlist(item.id)
+      onSwipeAction?.({
+        entry,
+        kind: 'buried',
+        revert: async () => void (await addToWatchlist(movie.tmdb_id, user.id)),
+      })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function handleDragEnd(_event: PointerEvent | MouseEvent | TouchEvent, info: PanInfo) {
+    const distance = info.offset.x
+    const velocity = info.velocity.x
+    const passedRight = distance >= SWIPE_DISTANCE_THRESHOLD || velocity >= SWIPE_VELOCITY_THRESHOLD
+    const passedLeft = distance <= -SWIPE_DISTANCE_THRESHOLD || velocity <= -SWIPE_VELOCITY_THRESHOLD
+
+    if (passedRight) {
+      setSwiping(true)
+      await animate(x, window.innerWidth, { duration: reducedMotion ? 0 : 0.3, ease: 'easeIn' }).finished
+      await commitMarkWatched()
+      // The list removes this entry once onSwipeAction fires above — by
+      // then the card is already off-screen, so no visible jump.
+      return
+    }
+    if (passedLeft) {
+      setSwiping(true)
+      await animate(x, -window.innerWidth, { duration: reducedMotion ? 0 : 0.3, ease: 'easeIn' }).finished
+      await commitBury()
+      return
+    }
+    // Incomplete swipe — spring back on --ease-standard rather than a
+    // physics spring, per DESIGN.md's own wording.
+    void animate(x, 0, { duration: reducedMotion ? 0 : 0.28, ease: EASE_STANDARD })
   }
 
   async function handleKeep(event: React.MouseEvent) {
@@ -111,11 +232,8 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
     setDismissed(true)
   }
 
-  return (
-    <Link
-      to={`/movie/${movie.tmdb_id}`}
-      className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
-    >
+  const cardBody = (
+    <>
       <div className="relative aspect-[2/3] overflow-hidden rounded-poster bg-surface shadow-none transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-active:shadow-[var(--shadow-lift)]">
         {posterUrl ? (
           <motion.img
@@ -214,6 +332,85 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
           )}
         </div>
       </div>
-    </Link>
+    </>
+  )
+
+  if (!gesturesActive) {
+    return (
+      <Link
+        to={`/movie/${movie.tmdb_id}`}
+        className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
+      >
+        {cardBody}
+      </Link>
+    )
+  }
+
+  return (
+    <div className="relative">
+      {/* Swipe reveals (DESIGN.md §5) — right for mark-watched
+          (--accent-warm, check), left for bury (--muted-subtle, down
+          arrow). Sit behind the draggable card, uncovered as it slides. */}
+      <motion.div
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center rounded-poster pl-5"
+        style={{ backgroundColor: 'var(--accent-warm)', opacity: rightRevealOpacity }}
+      >
+        <CheckIcon />
+      </motion.div>
+      <motion.div
+        aria-hidden="true"
+        className="absolute inset-0 flex items-center justify-end rounded-poster pr-5"
+        style={{ backgroundColor: 'var(--muted-subtle)', opacity: leftRevealOpacity }}
+      >
+        <BuryIcon />
+      </motion.div>
+
+      <motion.div
+        drag="x"
+        style={{ x }}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={1}
+        dragMomentum={false}
+        onDragStart={clearLongPressTimer}
+        onDrag={(_e, info) => {
+          draggedRef.current = Math.abs(info.offset.x) > 5
+        }}
+        onDragEnd={(e, info) => void handleDragEnd(e, info)}
+        onPointerDown={handlePointerDown}
+        onPointerUp={clearLongPressTimer}
+        onPointerCancel={clearLongPressTimer}
+        className="relative bg-bg"
+      >
+        <Link
+          to={`/movie/${movie.tmdb_id}`}
+          draggable={false}
+          onClick={(event) => {
+            if (draggedRef.current || swiping) {
+              event.preventDefault()
+              draggedRef.current = false
+            }
+          }}
+          className="group flex flex-col gap-3"
+        >
+          {cardBody}
+        </Link>
+      </motion.div>
+
+      <PosterActionSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        entry={entry}
+        status={item.status}
+        onMarkWatched={async () => {
+          await commitMarkWatched()
+          setSheetOpen(false)
+        }}
+        onBury={async () => {
+          await commitBury()
+          setSheetOpen(false)
+        }}
+      />
+    </div>
   )
 }

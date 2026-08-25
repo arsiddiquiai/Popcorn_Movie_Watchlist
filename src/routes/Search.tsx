@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { FilterBar, DEFAULT_ADVANCED_FILTERS, hasActiveAdvancedFilters, type AdvancedFilters } from '../components/search/FilterBar'
 import { DiscoverTabs } from '../components/layout/DiscoverTabs'
+import { RefreshIcon } from '../components/layout/icons'
 import { Page, PageHeader } from '../components/layout/Page'
 import { LanguageChips } from '../components/search/LanguageChips'
 import { MovieRow } from '../components/search/MovieRow'
 import { SearchResultCard } from '../components/search/SearchResultCard'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
+import { PullToRefresh } from '../components/ui/PullToRefresh'
 import {
   discoverMovies,
   getNowPlayingMovies,
@@ -133,6 +135,63 @@ export default function Search() {
     return () => controller.abort()
   }, [debouncedQuery, filtersActive, language, filters])
 
+  // Pull-to-refresh (DESIGN.md §5) and its visible tap equivalent both call
+  // this — a self-contained re-fetch of whichever mode is currently
+  // showing, rather than threading a shared abort-controller through the
+  // three effects above (each already has its own careful race-condition
+  // handling that isn't worth disturbing for this).
+  async function refresh() {
+    if (debouncedQuery) {
+      setSearchStatus('loading')
+      setSearchError(null)
+      try {
+        const movies = await searchMovies(debouncedQuery)
+        const filtered = language === 'all' ? movies : movies.filter((m) => m.original_language === language)
+        setSearchResults(filtered)
+        setSearchStatus('success')
+      } catch (err) {
+        setSearchError(err instanceof TmdbError ? err.message : 'Something went wrong searching TMDB.')
+        setSearchStatus('error')
+      }
+      return
+    }
+
+    if (!filtersActive) {
+      setTrendingStatus('loading')
+      setNowPlayingStatus('loading')
+      const [trendingResult, nowPlayingResult] = await Promise.allSettled([getTrendingMovies(), getNowPlayingMovies()])
+      if (trendingResult.status === 'fulfilled') {
+        setTrending(trendingResult.value)
+        setTrendingStatus('success')
+      } else {
+        setTrendingStatus('error')
+      }
+      if (nowPlayingResult.status === 'fulfilled') {
+        setNowPlaying(nowPlayingResult.value)
+        setNowPlayingStatus('success')
+      } else {
+        setNowPlayingStatus('error')
+      }
+      return
+    }
+
+    setDiscoverStatus('loading')
+    try {
+      const movies = await discoverMovies({
+        language,
+        genreIds: filters.genreIds,
+        yearFrom: filters.yearFrom ?? undefined,
+        yearTo: filters.yearTo ?? undefined,
+        minRating: filters.minRating ?? undefined,
+        sortBy: filters.sortBy,
+      })
+      setDiscoverResults(movies)
+      setDiscoverStatus('success')
+    } catch {
+      setDiscoverStatus('error')
+    }
+  }
+
   return (
     <Page width="wide">
       {/* DiscoverTabs now carries the mode-specific subtitle that used to
@@ -159,10 +218,24 @@ export default function Search() {
       </div>
 
       <div className="flex w-full flex-col gap-4">
-        <LanguageChips value={language} onChange={setLanguage} />
+        <div className="flex items-center gap-3">
+          <div className="min-w-0 flex-1">
+            <LanguageChips value={language} onChange={setLanguage} />
+          </div>
+          {/* Visible tap equivalent for pull-to-refresh (DESIGN.md §5). */}
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            aria-label="Refresh"
+            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-surface hover:text-text"
+          >
+            <RefreshIcon />
+          </button>
+        </div>
         <FilterBar filters={filters} onChange={setFilters} disabled={Boolean(debouncedQuery)} />
       </div>
 
+      <PullToRefresh onRefresh={refresh}>
       <div className="flex-1">
         {debouncedQuery ? (
           <>
@@ -219,6 +292,7 @@ export default function Search() {
           </section>
         )}
       </div>
+      </PullToRefresh>
     </Page>
   )
 }

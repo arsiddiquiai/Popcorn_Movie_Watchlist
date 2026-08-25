@@ -1,17 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { useAppBarAction } from '../components/layout/AppShell'
-import { DiceIcon } from '../components/layout/icons'
+import { DiceIcon, RefreshIcon } from '../components/layout/icons'
 import { KernelMark } from '../components/layout/Logo'
 import { Page, PageHeader } from '../components/layout/Page'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
-import { WatchlistCard } from '../components/watchlist/WatchlistCard'
+import { PullToRefresh } from '../components/ui/PullToRefresh'
+import { UndoToast } from '../components/watchlist/UndoToast'
+import { WatchlistCard, type SwipeAction } from '../components/watchlist/WatchlistCard'
 import { decayLevelForAddedAt } from '../lib/decay'
 import { getRandomPopularMovie } from '../lib/tmdbClient'
 import { fetchWatchlistByStatus, type WatchlistEntry } from '../lib/watchlist'
 import { useTheme } from '../theme/ThemeProvider'
+
+const UNDO_WINDOW_MS = 5000
 
 type Tab = 'want' | 'watched'
 
@@ -49,6 +53,11 @@ export default function Watchlist() {
   // raw scrollY threshold, so it stays correct regardless of header height.
   const [compact, setCompact] = useState(false)
   const headerRef = useRef<HTMLDivElement>(null)
+  // The 5s undo toast for swipe/long-press actions (DESIGN.md §5). Only
+  // one at a time — a second swipe while a toast is showing replaces it,
+  // clearing the previous action's own timer.
+  const [toastAction, setToastAction] = useState<SwipeAction | null>(null)
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     try {
@@ -110,26 +119,73 @@ export default function Watchlist() {
     </div>,
   )
 
-  useEffect(() => {
-    if (!user) return
-    let cancelled = false
-    setStatus('loading')
-
-    fetchWatchlistByStatus(user.id, tab)
-      .then((result) => {
-        if (cancelled) return
+  // Extracted so pull-to-refresh and the manual Refresh button (its
+  // required non-gesture equivalent, DESIGN.md §5) can both re-run the
+  // exact same fetch the initial load uses, rather than each inventing
+  // their own. `silent` skips the full-page skeleton — a refresh of a
+  // list you're already looking at shouldn't blank it first.
+  const loadEntries = useCallback(
+    async (silent = false) => {
+      if (!user) return
+      if (!silent) setStatus('loading')
+      try {
+        const result = await fetchWatchlistByStatus(user.id, tab)
         setEntries(result)
         setStatus('success')
-      })
-      .catch(() => {
-        if (cancelled) return
-        setStatus('error')
-      })
+      } catch {
+        if (!silent) setStatus('error')
+      }
+    },
+    [user, tab],
+  )
 
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      if (cancelled) return
+      await loadEntries()
+    })()
     return () => {
       cancelled = true
     }
+    // loadEntries already depends on [user, tab] itself — this effect just
+    // needs to re-run on the same pair, not on loadEntries' own identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, tab])
+
+  function clearToastTimer() {
+    if (toastTimer.current) {
+      clearTimeout(toastTimer.current)
+      toastTimer.current = null
+    }
+  }
+
+  function handleSwipeAction(action: SwipeAction) {
+    setEntries((prev) => prev.filter((e) => e.item.id !== action.entry.item.id))
+    clearToastTimer()
+    setToastAction(action)
+    toastTimer.current = setTimeout(() => {
+      setToastAction(null)
+      toastTimer.current = null
+    }, UNDO_WINDOW_MS)
+  }
+
+  async function handleUndo() {
+    if (!toastAction) return
+    clearToastTimer()
+    const action = toastAction
+    setToastAction(null)
+    try {
+      await action.revert()
+      setEntries((prev) => [action.entry, ...prev])
+    } catch {
+      // The revert call failing is rare (a transient network error) and
+      // there's no toast left to retry from — the item just stays wherever
+      // the original action left it; a manual refresh picks up the truth.
+    }
+  }
+
+  useEffect(() => clearToastTimer, [])
 
   return (
     <Page width="wide">
@@ -169,8 +225,18 @@ export default function Watchlist() {
             ))}
           </div>
 
+          {/* Visible tap equivalent for pull-to-refresh (DESIGN.md §5). */}
+          <button
+            type="button"
+            onClick={() => void loadEntries(true)}
+            aria-label="Refresh"
+            className="grid h-9 w-9 place-items-center rounded-lg text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-surface hover:text-text"
+          >
+            <RefreshIcon />
+          </button>
       </div>
 
+      <PullToRefresh onRefresh={() => loadEntries(true)}>
       <div className="flex-1">
         {status === 'loading' && <PosterGridSkeleton />}
 
@@ -241,12 +307,28 @@ export default function Watchlist() {
                           ),
                     )
                   }}
+                  onSwipeAction={handleSwipeAction}
                 />
               </motion.div>
             ))}
           </motion.div>
         )}
       </div>
+      </PullToRefresh>
+
+      <AnimatePresence>
+        {toastAction && (
+          <UndoToast
+            key={toastAction.entry.item.id}
+            message={toastAction.kind === 'watched' ? 'Marked as watched' : 'Buried'}
+            onUndo={() => void handleUndo()}
+            onDismiss={() => {
+              clearToastTimer()
+              setToastAction(null)
+            }}
+          />
+        )}
+      </AnimatePresence>
     </Page>
   )
 }

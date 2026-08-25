@@ -115,6 +115,17 @@ export async function markAsWatched(itemId: string): Promise<void> {
   if (error) throw error
 }
 
+/** Reverts markAsWatched — the undo path for the swipe-right-to-mark-
+ *  watched gesture (DESIGN.md §5). Any rating already saved is left alone;
+ *  this only touches watchlist status, same as markAsWatched itself does. */
+export async function unmarkWatched(itemId: string): Promise<void> {
+  const { error } = await supabase
+    .from('watchlist_items')
+    .update({ status: 'want', watched_at: null })
+    .eq('id', itemId)
+  if (error) throw error
+}
+
 export async function removeFromWatchlist(itemId: string): Promise<void> {
   const { error } = await supabase.from('watchlist_items').update({ status: 'dropped' }).eq('id', itemId)
   if (error) throw error

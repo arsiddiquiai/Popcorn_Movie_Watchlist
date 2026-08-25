@@ -69,3 +69,14 @@ export function FeedbackIcon() {
     </svg>
   )
 }
+
+/** The visible non-gesture equivalent for pull-to-refresh (DESIGN.md §5 —
+ *  "every gesture has a visible tap equivalent") on Shelf and Search. */
+export function RefreshIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3" />
+      <path d="M18 3v4h-4M6 21v-4h4" />
+    </svg>
+  )
+}
