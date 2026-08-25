@@ -8,6 +8,7 @@ import {
   type AssistantMessage,
   type AssistantSuggestedMovie,
 } from '../lib/assistantClient'
+import { AssistantMark, type AssistantMarkState } from '../components/assistant/AssistantMark'
 import { PageHeader } from '../components/layout/Page'
 import { addToWatchlist } from '../lib/watchlist'
 import { tmdbImageUrl } from '../lib/tmdbClient'
@@ -87,7 +88,13 @@ export default function Assistant() {
   // more than one message across a conversation, and once it's added it
   // should read as added everywhere, not just on the chip that was clicked.
   const [chipStates, setChipStates] = useState<Record<number, ChipState>>({})
+  // Fires the kernel's one-shot "popped" flash when a reply lands, then
+  // settles back to idle. There's no mic/TTS anywhere in this app, so
+  // listening/speaking stay unwired — only thinking (while sending) and
+  // popped (on arrival) have anything real to reflect here.
+  const [justPopped, setJustPopped] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
+  const markState: AssistantMarkState = sending ? 'thinking' : justPopped ? 'popped' : 'idle'
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: reducedMotion ? 'auto' : 'smooth' })
@@ -136,6 +143,8 @@ export default function Assistant() {
           suggestedMovies: result.suggested_movies,
         },
       ])
+      setJustPopped(true)
+      setTimeout(() => setJustPopped(false), 900)
       // A film added via a tool call this turn (the user typed "add it")
       // should also show as added on any matching chip, not just via the
       // "Added to your watchlist" link.
@@ -162,6 +171,7 @@ export default function Assistant() {
       <PageHeader
         title="Movie Assistant"
         subtitle={'Talk through what to watch — ask about a film, describe a mood, or say "add it" when something clicks.'}
+        actions={<AssistantMark state={markState} size={28} />}
       />
 
       <div className={`mt-10 flex flex-col gap-4 overflow-y-auto ${hasContent ? 'flex-1' : ''}`}>
@@ -208,17 +218,9 @@ export default function Assistant() {
 
         {sending && (
           <div className="flex justify-start">
-            <div className="rounded-lg border border-border bg-surface px-4 py-2.5 font-ui text-sm text-muted">
-              {reducedMotion ? (
-                'Thinking…'
-              ) : (
-                <motion.span
-                  animate={{ opacity: [0.4, 1, 0.4] }}
-                  transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
-                >
-                  Thinking…
-                </motion.span>
-              )}
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2.5 font-ui text-sm text-muted">
+              <AssistantMark state="thinking" size={16} />
+              Thinking…
             </div>
           </div>
         )}

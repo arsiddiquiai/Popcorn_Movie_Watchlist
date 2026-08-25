@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
+import { AssistantMark } from '../assistant/AssistantMark'
 import { energyVisuals } from '../../lib/energyScale'
 import { rgbaString } from '../../lib/ratingScale'
-import { Spinner } from '../ui/Spinner'
 import { useRatingColors } from '../rating/useRatingColors'
 
 /** After this long, the copy acknowledges the wait rather than sitting silent. */
@@ -81,7 +81,13 @@ export function TransformationOverlay({ energy, reducedMotion }: TransformationO
       )}
 
       <div className="relative flex flex-col items-center gap-6 text-center">
-        {reducedMotion && <Spinner label="Finding your pick" />}
+        {/* Reuses the Assistant's own "thinking" state (DESIGN.md §7)
+            rather than a second loading treatment — same orbiting-dots
+            animation, same meaning: the app is working on this. Already
+            reduced-motion-safe on its own (AssistantMark reads
+            useTheme().reducedMotion internally), so no separate
+            Spinner fallback is needed here any more. */}
+        <AssistantMark state="thinking" size={56} />
         <p className="max-w-lg font-display text-2xl leading-tight text-text sm:text-3xl">
           {stillThinking ? 'Still thinking…' : visuals.statusCopy}
         </p>

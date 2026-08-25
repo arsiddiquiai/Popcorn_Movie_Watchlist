@@ -190,7 +190,7 @@ export default function PickForMe() {
     // already applied to Watchlist (DESIGN.md §3).
     return (
       <div className="flex flex-col items-center px-6 pt-8 pb-12 sm:pt-10">
-        <MoodForm value={input} onChange={setInput} onSubmit={() => void handleSubmit()} />
+        <MoodForm value={input} onChange={setInput} onSubmit={() => void handleSubmit()} reducedMotion={reducedMotion} />
       </div>
     )
   }
@@ -249,7 +249,10 @@ export default function PickForMe() {
   if (!current) return null
 
   return (
-    <div className="flex min-h-screen flex-col justify-center gap-6 px-6 py-12">
+    // No horizontal padding/centering here (live-review redesign) — the
+    // poster hero inside ResultCard needs to run edge-to-edge to actually
+    // "fill the screen"; ResultCard handles its own padding below the hero.
+    <div className="flex min-h-screen flex-col gap-6 pb-12">
       <ResultCard
         movie={current.movie}
         reason={current.reason}
@@ -272,7 +275,7 @@ export default function PickForMe() {
         onNotThisOne={handleNotThisOne}
       />
 
-      <div className="flex justify-center">
+      <div className="flex justify-center px-6">
         <button
           type="button"
           onClick={startOver}

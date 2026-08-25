@@ -38,7 +38,11 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
         to={`/movie/${movie.id}`}
         className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
       >
-        <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-hover:shadow-[var(--shadow-glow)]">
+        {/* Border/radius/shadow brought in line with WatchlistCard's density
+            pass (DESIGN.md §3) — this card was missed at the time (QA
+            checklist catch): no border, --radius-poster, shadow only on
+            press rather than at rest or on hover. */}
+        <div className="relative aspect-[2/3] overflow-hidden rounded-poster bg-surface shadow-none transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-active:shadow-[var(--shadow-lift)]">
           {posterUrl ? (
             <motion.img
               layoutId={posterLayoutId(movie.id)}
@@ -60,10 +64,10 @@ export function SearchResultCard({ movie }: { movie: TmdbSearchMovie }) {
         </div>
 
         <div className="flex flex-col gap-1">
-          <h3 className="truncate font-display text-base font-semibold text-text" title={movie.title}>
+          <h3 className="line-clamp-2 font-ui text-[13px] leading-[1.25] font-semibold text-text" title={movie.title}>
             {movie.title}
           </h3>
-          <span className="font-mono text-[11px] uppercase tracking-wide text-muted-subtle">
+          <span className="font-mono text-[10px] uppercase tracking-[0.06em] text-muted-subtle">
             {releaseYear(movie.release_date)}
           </span>
         </div>

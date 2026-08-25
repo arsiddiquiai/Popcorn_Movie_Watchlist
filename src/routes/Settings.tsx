@@ -135,9 +135,9 @@ export default function Settings() {
                   className="flex h-12 w-[72px] flex-col justify-between overflow-hidden rounded-md border border-border bg-bg p-1.5"
                 >
                   <span className="flex gap-1">
-                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
-                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
-                    <span className="h-4 w-1/3 rounded-[2px] bg-surface-2" />
+                    <span className="h-4 w-1/3 rounded-xs bg-surface-2" />
+                    <span className="h-4 w-1/3 rounded-xs bg-surface-2" />
+                    <span className="h-4 w-1/3 rounded-xs bg-surface-2" />
                   </span>
                   <span className="flex items-center gap-1">
                     <span className="h-1 flex-1 rounded-full bg-text/70" />

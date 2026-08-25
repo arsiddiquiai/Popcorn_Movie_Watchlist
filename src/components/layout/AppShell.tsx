@@ -1,10 +1,16 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router-dom'
+import { AssistantFab } from '../assistant/AssistantFab'
 import { FeedbackIcon } from './icons'
 import { Logo } from './Logo'
 import { mainBackgroundForMode, ModeHeader } from './ModeHeader'
 import { getActiveMode, Nav } from './Nav'
 import { TabBar } from './TabBar'
+
+// DESIGN.md §7: the kernel FAB shows on Shelf and Search only — not every
+// Discover/Decide route, so this is an explicit pathname check rather than
+// reusing getActiveMode's broader grouping.
+const ASSISTANT_FAB_ROUTES = new Set(['/', '/search'])
 
 // A slot the mobile app bar exposes for the current page's own primary
 // action (today: Watchlist's Surprise Me dice, and its collapsed title —
@@ -75,6 +81,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           )}
           {children}
         </main>
+
+        {ASSISTANT_FAB_ROUTES.has(pathname) && <AssistantFab />}
 
         <TabBar />
       </div>

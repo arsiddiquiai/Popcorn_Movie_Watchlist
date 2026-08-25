@@ -22,7 +22,13 @@ export function Logo() {
         className="grid h-10 w-10 shrink-0 place-items-center rounded-md"
         style={{
           background: 'linear-gradient(135deg, var(--hero) 0%, var(--accent-warm) 100%)',
-          boxShadow: '0 8px 32px -8px rgb(200 68 45 / 0.45)',
+          // Was a hardcoded rgb(200 68 45 / .45) — nightcap's own --hero,
+          // so it read right there but stayed ember-tinted on daylight and
+          // neon regardless of their actual --hero. Same theme-blind-shadow
+          // bug .btn-hero's box-shadow had before --glow/--glow-strong;
+          // color-mix keeps this one live against whichever --hero is
+          // active instead of needing its own token pair for one box.
+          boxShadow: '0 8px 32px -8px color-mix(in srgb, var(--hero) 45%, transparent)',
         }}
       >
         <KernelMark />

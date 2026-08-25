@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { AccountFooterLinks } from '../components/layout/AccountFooterLinks'
 import { AccountHeader } from '../components/layout/AccountHeader'
 import { PrimaryAccountActions } from '../components/layout/PrimaryAccountActions'
+import { ShareWatchlistCard } from '../components/layout/ShareWatchlistCard'
 import { Spinner } from '../components/ui/Spinner'
 import { requestTaste, TasteError, type TasteResult } from '../lib/tasteClient'
 import { useTheme } from '../theme/ThemeProvider'
@@ -155,7 +156,7 @@ export default function TasteDNA() {
                 />
                 <Tooltip
                   cursor={{ fill: colors.border, opacity: 0.3 }}
-                  contentStyle={{ background: 'var(--surface-2)', border: `1px solid ${colors.border}`, borderRadius: 8 }}
+                  contentStyle={{ background: 'var(--surface-2)', border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-sm)' }}
                   labelStyle={{ color: 'var(--text)' }}
                 />
                 <Bar dataKey="count" fill={colors.accent} radius={[0, 6, 6, 0]} />
@@ -172,7 +173,7 @@ export default function TasteDNA() {
                 <YAxis allowDecimals={false} tick={{ fill: colors.muted, fontSize: 11 }} axisLine={false} tickLine={false} />
                 <Tooltip
                   cursor={{ fill: colors.border, opacity: 0.3 }}
-                  contentStyle={{ background: 'var(--surface-2)', border: `1px solid ${colors.border}`, borderRadius: 8 }}
+                  contentStyle={{ background: 'var(--surface-2)', border: `1px solid ${colors.border}`, borderRadius: 'var(--radius-sm)' }}
                   labelStyle={{ color: 'var(--text)' }}
                 />
                 <Bar dataKey="count" fill={colors.accent} radius={[6, 6, 0, 0]} />
@@ -217,6 +218,7 @@ export default function TasteDNA() {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-6 py-8 sm:px-10 sm:py-10">
       <AccountHeader />
       <PrimaryAccountActions />
+      <ShareWatchlistCard />
 
       {body}
 

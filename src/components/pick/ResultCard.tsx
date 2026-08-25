@@ -25,11 +25,12 @@ interface ResultCardProps {
  * The single confident answer. CLAUDE.md: "Pick For Me returns exactly one
  * primary result. Never a list. This is the product thesis."
  *
- * So this deliberately shares no visual DNA with SearchResultCard or
- * WatchlistCard — no 2:3 grid tile, no truncated title, no small type. It's
- * a wide single-column-on-mobile / two-column-on-desktop panel with a bloom
- * behind it, display-size title, and the reason set larger than the
- * metadata. Nothing about it should read as "one of several".
+ * Live-review redesign: fills the screen with one poster-led answer rather
+ * than sitting as a card in the middle of the viewport — a full-bleed
+ * poster hero (the same visual language as Movie Detail's, not the same
+ * component: this poster isn't a shared-element transition target, it just
+ * appeared) with title/reason/actions on and below its scrim. Nothing about
+ * it should read as "one of several".
  */
 export function ResultCard({
   movie,
@@ -50,48 +51,36 @@ export function ResultCard({
   return (
     <motion.article
       key={swapKey}
-      initial={reducedMotion ? false : { opacity: 0, scale: 0.94 }}
+      initial={reducedMotion ? false : { opacity: 0, scale: 0.97 }}
       animate={{ opacity: 1, scale: 1 }}
-      transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-      className="relative isolate mx-auto w-full max-w-4xl overflow-hidden rounded-xl border border-accent-warm/30 bg-surface p-6 shadow-[var(--shadow-lift)] sm:p-8"
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="flex w-full flex-col"
     >
-      {/* One large soft bloom, no fine detail — survives video compression. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(120%_90%_at_50%_0%,var(--hero)_0%,transparent_65%)] opacity-[0.16]"
-      />
-
-      <div className="flex flex-col gap-6 sm:flex-row sm:gap-8">
-        <div className="mx-auto w-44 shrink-0 sm:mx-0 sm:w-56">
-          <div className="aspect-[2/3] overflow-hidden rounded-lg bg-bg shadow-[var(--shadow-lift)]">
-            {posterUrl ? (
-              <img src={posterUrl} alt={movie.title} className="h-full w-full object-cover" />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center px-4 text-center font-ui text-sm text-muted">
-                {movie.title}
-              </div>
-            )}
+      <div className="relative aspect-[2/3] max-h-[65vh] w-full overflow-hidden bg-surface">
+        {posterUrl ? (
+          <img src={posterUrl} alt={movie.title} className="h-full w-full object-cover" />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center px-6 text-center font-ui text-sm text-muted">
+            {movie.title}
           </div>
-        </div>
+        )}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-bg via-bg/75 to-transparent" />
 
-        <div className="flex min-w-0 flex-1 flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="font-display text-xs uppercase tracking-widest text-accent-warm">Tonight's pick</span>
-            {coldStart && (
-              // Stated, not apologised for. The reason text itself already
-              // says we don't know their taste yet; this just labels why.
-              <span className="rounded-full border border-border px-2.5 py-0.5 font-ui text-xs text-muted">
-                Learning your taste
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-6 sm:px-10 sm:pb-8">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-3xl flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-display text-xs uppercase tracking-widest text-accent-warm">Tonight's pick</span>
+              {coldStart && (
+                <span className="rounded-full border border-border bg-bg/70 px-2.5 py-0.5 font-ui text-xs text-muted backdrop-blur-sm">
+                  Learning your taste
+                </span>
+              )}
+              <span className="rounded-full border border-border bg-bg/70 px-2.5 py-0.5 font-ui text-xs text-muted backdrop-blur-sm">
+                {source === 'watchlist' ? 'From your watchlist' : 'Not on your list yet'}
               </span>
-            )}
-            <span className="rounded-full border border-border px-2.5 py-0.5 font-ui text-xs text-muted">
-              {source === 'watchlist' ? 'From your watchlist' : 'Not on your list yet'}
-            </span>
-          </div>
-
-          <div>
-            <h2 className="font-display text-3xl leading-tight text-text sm:text-4xl">{movie.title}</h2>
-            <div className="mt-2 flex flex-wrap items-center gap-2 font-ui text-sm text-muted">
+            </div>
+            <h2 className="font-display text-3xl leading-tight text-text sm:text-5xl">{movie.title}</h2>
+            <div className="flex flex-wrap items-center gap-2 font-ui text-sm text-muted">
               <span>{movie.release_year ?? '—'}</span>
               {runtime && (
                 <>
@@ -107,73 +96,73 @@ export function ResultCard({
               )}
             </div>
           </div>
+        </div>
+      </div>
 
-          {/* The reason is the product, so it's set larger than the metadata
-              and given its own quiet surface rather than reading as caption. */}
-          <p className="rounded-lg border border-border bg-bg/60 px-5 py-4 font-ui text-base leading-relaxed text-text sm:text-lg">
-            {reason}
-          </p>
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 px-6 py-6 sm:px-10">
+        {/* The reason is the product, so it's set larger than the metadata
+            and given its own quiet surface rather than reading as caption. */}
+        <p className="rounded-lg border border-border bg-surface px-5 py-4 font-ui text-base leading-relaxed text-text sm:text-lg">
+          {reason}
+        </p>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {source === 'catalogue' && actionState !== 'added' && (
-              <button
-                type="button"
-                onClick={onAdd}
-                disabled={actionState === 'pending'}
-                className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
-              >
-                {actionState === 'pending' ? 'Adding…' : 'Add to Watchlist'}
-              </button>
-            )}
-
-            {source === 'watchlist' && actionState !== 'watched' && (
-              <button
-                type="button"
-                onClick={onMarkWatched}
-                disabled={actionState === 'pending'}
-                className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
-              >
-                {actionState === 'pending' ? 'Saving…' : 'Mark as Watched'}
-              </button>
-            )}
-
-            {actionState === 'added' && (
-              <span className="rounded-xl border border-accent-warm/40 bg-accent-warm/10 px-5 py-3 font-ui text-sm font-semibold text-accent-warm">
-                Added to your watchlist ✓
-              </span>
-            )}
-
-            {actionState === 'watched' && (
-              <span className="rounded-xl border border-accent-warm/40 bg-accent-warm/10 px-5 py-3 font-ui text-sm font-semibold text-accent-warm">
-                Marked as watched ✓
-              </span>
-            )}
-
-            <Link
-              to={`/movie/${movie.tmdb_id}`}
-              className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 active:scale-[0.97] transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/50"
+        <div className="flex flex-wrap items-center gap-3">
+          {source === 'catalogue' && actionState !== 'added' && (
+            <button
+              type="button"
+              onClick={onAdd}
+              disabled={actionState === 'pending'}
+              className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
             >
-              {actionState === 'watched' ? 'Rate it' : 'Full details'}
-            </Link>
+              {actionState === 'pending' ? 'Adding…' : 'Add to Watchlist'}
+            </button>
+          )}
 
-            {/* Always available until they act on it — rejecting the last
-                option is itself a meaningful answer, not a dead end. */}
-            {!settled && (
-              <button
-                type="button"
-                onClick={onNotThisOne}
-                disabled={actionState === 'pending'}
-                className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text disabled:opacity-60"
-              >
-                Not this one
-              </button>
-            )}
-          </div>
+          {source === 'watchlist' && actionState !== 'watched' && (
+            <button
+              type="button"
+              onClick={onMarkWatched}
+              disabled={actionState === 'pending'}
+              className="btn-hero rounded-xl px-5 py-3 font-ui text-sm font-semibold"
+            >
+              {actionState === 'pending' ? 'Saving…' : 'Mark as Watched'}
+            </button>
+          )}
 
-          {actionState === 'error' && (
-            <p className="font-ui text-sm text-accent-cold">That didn't save. Try again.</p>
+          {actionState === 'added' && (
+            <span className="rounded-xl border border-accent-warm/40 bg-accent-warm/10 px-5 py-3 font-ui text-sm font-semibold text-accent-warm">
+              Added to your watchlist ✓
+            </span>
+          )}
+
+          {actionState === 'watched' && (
+            <span className="rounded-xl border border-accent-warm/40 bg-accent-warm/10 px-5 py-3 font-ui text-sm font-semibold text-accent-warm">
+              Marked as watched ✓
+            </span>
+          )}
+
+          <Link
+            to={`/movie/${movie.tmdb_id}`}
+            className="rounded-full border border-border px-6 py-3 font-ui text-sm text-text transition-[border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-muted/40 active:scale-[0.97]"
+          >
+            {actionState === 'watched' ? 'Rate it' : 'Full details'}
+          </Link>
+
+          {/* Always available until they act on it — rejecting the last
+              option is itself a meaningful answer, not a dead end. */}
+          {!settled && (
+            <button
+              type="button"
+              onClick={onNotThisOne}
+              disabled={actionState === 'pending'}
+              className="font-ui text-sm text-muted underline underline-offset-4 transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:text-text disabled:opacity-60"
+            >
+              Not this one
+            </button>
           )}
         </div>
+
+        {actionState === 'error' && <p className="font-ui text-sm text-accent-cold">That didn't save. Try again.</p>}
       </div>
     </motion.article>
   )
