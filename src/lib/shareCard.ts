@@ -81,6 +81,13 @@ const POSTER_RADIUS = 22
 const KERNEL_PATH =
   'M13.5 4.2c-2.1.4-3.6 2-3.6 3.9 0 .5.1.9.3 1.3-2.5.7-4.3 2.6-4.3 4.9 0 .9.3 1.7.8 2.4L5.1 26.1c-.1.9.6 1.7 1.6 1.7h1.9l1-9.4a1 1 0 0 1 2 .2l-1 9.2h2.2l.6-9.6a1 1 0 0 1 2 .1l-.6 9.5h2.1l-.2-9.6a1 1 0 0 1 2-.1l.3 9.7h2l-1-9.4a1 1 0 0 1 2-.2l1 9.6h1.8c1 0 1.7-.8 1.6-1.7l-1.6-9.4c.5-.7.8-1.5.8-2.4 0-2.3-1.8-4.2-4.3-4.9.2-.4.3-.8.3-1.3 0-2.1-1.9-3.8-4.3-3.8-1 0-2 .3-2.7.9-.6-.5-1.5-.8-2.4-.8Z'
 
+/** 8s: generous for a poster image on a normal connection, but a hard
+ *  ceiling so one slow/hanging load can never stall the whole card
+ *  indefinitely — without this, a poster that never fires onload/onerror
+ *  (a stalled request, not just a failed one) would leave the "Making…"
+ *  button spinning forever with nothing to show and nothing logged. */
+const IMAGE_LOAD_TIMEOUT_MS = 8_000
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image()
@@ -88,10 +95,117 @@ function loadImage(src: string): Promise<HTMLImageElement> {
     // taint the canvas — required for canvas.toBlob() to work at all with
     // a cross-origin source image.
     img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => reject(new Error(`Failed to load ${src}`))
+    const timer = setTimeout(() => reject(new Error(`Timed out loading ${src}`)), IMAGE_LOAD_TIMEOUT_MS)
+    img.onload = () => {
+      clearTimeout(timer)
+      resolve(img)
+    }
+    img.onerror = () => {
+      clearTimeout(timer)
+      reject(new Error(`Failed to load ${src}`))
+    }
     img.src = src
   })
+}
+
+/**
+ * Drawn wherever a poster image genuinely couldn't be loaded — a themed
+ * panel with a visible outline, not just a flat theme.surface fill. Bug
+ * found via an actual rendered screenshot: theme.surface sits close enough
+ * to theme.bg's own gradient that an unbordered fallback panel read as
+ * empty/blank rather than as a deliberate placeholder, which is exactly
+ * what made a real image-load failure indistinguishable from "nothing
+ * rendered at all". The border makes the box's presence obvious regardless
+ * of how close the fill happens to sit to the background.
+ */
+function drawPosterPlaceholder(
+  ctx: CanvasRenderingContext2D,
+  theme: ShareCardTheme,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+) {
+  roundedRectPath(ctx, x, y, w, h, POSTER_RADIUS)
+  ctx.fillStyle = theme.surface
+  ctx.fill()
+  ctx.strokeStyle = theme.border
+  ctx.lineWidth = 2
+  roundedRectPath(ctx, x + 1, y + 1, w - 2, h - 2, POSTER_RADIUS)
+  ctx.stroke()
+}
+
+/**
+ * Shrinks `text` (in 2px steps down to `minSize`) until it fits `maxWidth`
+ * under the given font, then truncates with an ellipsis as a last resort
+ * if even the minimum size doesn't fit. Used for every single-line string
+ * on a card — stat line, verdict, taste badge, and the footer's share URL
+ * — none of which previously had any width check at all, so a longer than
+ * typical AI-generated line (or a long share URL, which has no spaces to
+ * wrap on) simply ran off the right edge of the canvas.
+ *
+ * Sets ctx.font/ctx.fillStyle are the CALLER's responsibility beforehand
+ * for colour; this function owns ctx.font's size/weight/family only, since
+ * it has to keep re-measuring as it shrinks.
+ */
+function fitSingleLine(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  weight: number,
+  family: string,
+  startSize: number,
+  minSize: number,
+  maxWidth: number,
+): { text: string; size: number } {
+  let size = startSize
+  ctx.font = `${weight} ${size}px "${family}"`
+  while (size > minSize && ctx.measureText(text).width > maxWidth) {
+    size -= 2
+    ctx.font = `${weight} ${size}px "${family}"`
+  }
+  let fitted = text
+  if (ctx.measureText(fitted).width > maxWidth) {
+    while (fitted.length > 1 && ctx.measureText(`${fitted}…`).width > maxWidth) {
+      fitted = fitted.slice(0, -1)
+    }
+    fitted = `${fitted}…`
+  }
+  return { text: fitted, size }
+}
+
+/**
+ * Greedy word-wrap into at most `maxLines` lines that each fit `maxWidth`
+ * under ctx's CURRENT font (caller sets it beforehand and doesn't change
+ * it between calling this and drawing the returned lines). If the text
+ * doesn't fit within maxLines, the last line is ellipsized and anything
+ * past it is dropped — "readable and complete, capped at a sane length"
+ * beats guaranteeing every word shows on a card meant to be glanced at.
+ */
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, maxLines: number): string[] {
+  const words = text.split(' ')
+  const lines: string[] = []
+  let line = ''
+  for (const word of words) {
+    const attempt = line ? `${line} ${word}` : word
+    if (line && ctx.measureText(attempt).width > maxWidth) {
+      lines.push(line)
+      line = word
+    } else {
+      line = attempt
+    }
+  }
+  if (line) lines.push(line)
+
+  if (lines.length > maxLines) {
+    const truncated = lines.slice(0, maxLines)
+    let last = truncated[maxLines - 1]
+    while (last.length > 1 && ctx.measureText(`${last}…`).width > maxWidth) {
+      last = last.slice(0, -1)
+    }
+    truncated[maxLines - 1] = `${last}…`
+    return truncated
+  }
+  return lines
 }
 
 function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
@@ -149,7 +263,7 @@ function drawWordmark(ctx: CanvasRenderingContext2D, theme: ShareCardTheme, marg
  *  single-movie cards below always have one for the caller's own film, but
  *  keeping the fallback means this stays reusable if that ever changes).
  *  Returns nothing; draws from `y` downward. */
-function drawFooter(ctx: CanvasRenderingContext2D, theme: ShareCardTheme, y: number, shareUrl?: string) {
+function drawFooter(ctx: CanvasRenderingContext2D, theme: ShareCardTheme, y: number, shareUrl?: string, marginX = 64) {
   const dividerWidth = 160
   ctx.strokeStyle = theme.border
   ctx.lineWidth = 1
@@ -164,9 +278,14 @@ function drawFooter(ctx: CanvasRenderingContext2D, theme: ShareCardTheme, y: num
   ctx.fillText('Decide what to watch, faster.', WIDTH / 2, y + 44)
 
   ctx.fillStyle = theme.accentWarm
-  ctx.font = '700 22px "Manrope"'
   // Strip the protocol — nobody needs to read "https://" on a shared image.
-  ctx.fillText(shareUrl ? shareUrl.replace(/^https?:\/\//, '') : 'Try Popcorn', WIDTH / 2, y + 80)
+  // Shrunk-to-fit rather than drawn raw: a share URL has no spaces to wrap
+  // on, so an unusually long token previously just ran off both edges of
+  // the canvas — see fitSingleLine's own doc comment.
+  const linkText = shareUrl ? shareUrl.replace(/^https?:\/\//, '') : 'Try Popcorn'
+  const fitted = fitSingleLine(ctx, linkText, 700, 'Manrope', 22, 15, WIDTH - marginX * 2)
+  ctx.textAlign = 'center'
+  ctx.fillText(fitted.text, WIDTH / 2, y + 80)
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -245,11 +364,19 @@ export async function renderShareCard(
   const cellW = (WIDTH - marginX * 2 - gap * (GRID_COLS - 1)) / GRID_COLS
   const cellH = cellW * 1.5
 
+  // BUG FIX: a failed poster load previously produced `null` and the draw
+  // loop below just skipped it — no log, no placeholder, nothing drawn.
+  // Verified against an actual rendered screenshot with every poster URL
+  // failing: the result was indistinguishable from "the grid never
+  // rendered at all", which is exactly the reported bug. Every failure is
+  // now logged with its URL, and drawPosterPlaceholder below makes a
+  // failed tile visibly a deliberate placeholder rather than empty space.
   const images = await Promise.all(
     posters.slice(0, GRID_COLS * GRID_ROWS).map(async (poster) => {
       try {
         return await loadImage(poster.url)
-      } catch {
+      } catch (err) {
+        console.error(`Watchlist card: poster failed to load for "${poster.title}" (${poster.url}):`, err)
         return null
       }
     }),
@@ -257,44 +384,50 @@ export async function renderShareCard(
 
   let lastRowBottom = gridTop
   images.forEach((img, index) => {
-    if (!img) return
     const col = index % GRID_COLS
     const row = Math.floor(index / GRID_COLS)
     const x = marginX + col * (cellW + gap)
     const y = gridTop + row * (cellH + gap)
-    ctx.save()
-    roundedRectPath(ctx, x, y, cellW, cellH, POSTER_RADIUS)
-    ctx.clip()
-    ctx.drawImage(img, x, y, cellW, cellH)
-    ctx.restore()
+    if (img) {
+      ctx.save()
+      roundedRectPath(ctx, x, y, cellW, cellH, POSTER_RADIUS)
+      ctx.clip()
+      ctx.drawImage(img, x, y, cellW, cellH)
+      ctx.restore()
+    } else {
+      drawPosterPlaceholder(ctx, theme, x, y, cellW, cellH)
+    }
     lastRowBottom = Math.max(lastRowBottom, y + cellH)
   })
 
   // Stat line, then the optional verdict/badge lines — each its own row,
   // in the same quiet muted tone, so a missing verdict (e.g. the cache
   // migration hasn't run yet, or the caller opted out) just tightens the
-  // gap to the footer instead of leaving a blank line.
+  // gap to the footer instead of leaving a blank line. Every line is
+  // shrunk-to-fit (fitSingleLine) rather than drawn raw — none of these
+  // previously had any width check, so an unusually long AI-generated
+  // verdict/badge could run off the canvas edge.
+  const textMaxWidth = WIDTH - marginX * 2
   ctx.fillStyle = theme.muted
-  ctx.font = '600 28px "Manrope"'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
   let cursorY = lastRowBottom + 56
-  ctx.fillText(statLine, WIDTH / 2, cursorY)
+  ctx.fillText(fitSingleLine(ctx, statLine, 600, 'Manrope', 28, 18, textMaxWidth).text, WIDTH / 2, cursorY)
 
   if (verdict) {
     cursorY += 42
-    ctx.font = '500 24px "Manrope"'
     ctx.fillStyle = theme.text
-    ctx.fillText(verdict, WIDTH / 2, cursorY)
+    ctx.textAlign = 'center'
+    ctx.fillText(fitSingleLine(ctx, verdict, 500, 'Manrope', 24, 16, textMaxWidth).text, WIDTH / 2, cursorY)
   }
   if (badge) {
     cursorY += verdict ? 38 : 42
-    ctx.font = '600 22px "Manrope"'
     ctx.fillStyle = theme.accentWarm
-    ctx.fillText(badge, WIDTH / 2, cursorY)
+    ctx.textAlign = 'center'
+    ctx.fillText(fitSingleLine(ctx, badge, 600, 'Manrope', 22, 15, textMaxWidth).text, WIDTH / 2, cursorY)
   }
 
-  drawFooter(ctx, theme, cursorY + 34, shareUrl)
+  drawFooter(ctx, theme, cursorY + 34, shareUrl, marginX)
 
   return canvasToBlob(canvas)
 }
@@ -358,9 +491,21 @@ export async function renderSingleMovieCard(
   // 2:3 crop, just smaller and centered, never distorted.
   const posterTop = eyebrowY + 28
   const fullWidthPosterW = WIDTH - marginX * 2
-  // Two title lines (lineHeight below) + gap + tagline + gap + footer
+  const maxWidth = WIDTH - marginX * 2
+  const TITLE_LINE_HEIGHT = 58
+  const TITLE_MAX_LINES = 2
+  const TAGLINE_LINE_HEIGHT = 36
+  // tagline can be a full sentence (a Pick For Me reason, "the product"
+  // per ResultCard's own comment) — worth real word-wrap, not a shrink or
+  // a truncation that would cut off the actual recommendation text.
+  const TAGLINE_MAX_LINES = 3
+  // Reserved for the MAX case (2 title lines + 3 tagline lines), not
+  // however many lines this specific call happens to need — a poster
+  // sized off an optimistic estimate is exactly how the previous overflow
+  // bug happened. Title lines + gap + tagline lines + gap + footer
   // (divider + two lines) + a bottom safety margin.
-  const RESERVED_BELOW_POSTER = 2 * 58 + 48 + 40 + 80 + 40
+  const RESERVED_BELOW_POSTER =
+    TITLE_MAX_LINES * TITLE_LINE_HEIGHT + 48 + TAGLINE_MAX_LINES * TAGLINE_LINE_HEIGHT + 40 + 80 + 40
   const maxPosterH = canvas.height - posterTop - RESERVED_BELOW_POSTER
   const posterH = Math.min(fullWidthPosterW * 1.5, Math.max(maxPosterH, 200))
   const posterW = posterH / 1.5
@@ -373,47 +518,40 @@ export async function renderSingleMovieCard(
     ctx.drawImage(img, posterX, posterTop, posterW, posterH)
     ctx.restore()
   } catch (err) {
-    console.error('Single-movie card: poster image failed to load, drawing a placeholder instead:', err)
-    // No poster image reachable — draw a plain themed panel with the title
-    // so the card still renders something coherent rather than failing.
-    roundedRectPath(ctx, posterX, posterTop, posterW, posterH, POSTER_RADIUS)
-    ctx.fillStyle = theme.surface
-    ctx.fill()
+    console.error(`Single-movie card: poster failed to load for "${poster.title}" (${poster.url}):`, err)
+    // No poster image reachable — draw a visible placeholder (see
+    // drawPosterPlaceholder's own doc comment on why an unbordered fill
+    // alone read as "nothing rendered" in an actual screenshot) so the
+    // card still renders something coherent rather than failing.
+    drawPosterPlaceholder(ctx, theme, posterX, posterTop, posterW, posterH)
   }
 
-  const titleY = posterTop + posterH + 64
+  // Title — word-wrapped up to TITLE_MAX_LINES, same helper the grid
+  // card's text uses, rather than the ad-hoc inline loop this used to be.
   ctx.fillStyle = theme.text
   ctx.font = '700 52px "Space Grotesk"'
   ctx.textAlign = 'left'
-  // Long titles wrap onto a second line rather than overflowing the card —
-  // a simple greedy word-wrap is enough here since this is at most two
-  // lines in practice.
-  const words = poster.title.split(' ')
-  let line = ''
-  let lineY = titleY
-  const maxWidth = WIDTH - marginX * 2
-  const lineHeight = 58
-  let linesDrawn = 0
-  for (const word of words) {
-    const attempt = line ? `${line} ${word}` : word
-    if (ctx.measureText(attempt).width > maxWidth && line) {
-      ctx.fillText(line, marginX, lineY)
-      line = word
-      lineY += lineHeight
-      linesDrawn += 1
-      if (linesDrawn >= 2) break
-    } else {
-      line = attempt
-    }
-  }
-  if (linesDrawn < 2 && line) ctx.fillText(line, marginX, lineY)
+  const titleLines = wrapText(ctx, poster.title, maxWidth, TITLE_MAX_LINES)
+  let cursorY = posterTop + posterH + 64
+  titleLines.forEach((line, i) => {
+    if (i > 0) cursorY += TITLE_LINE_HEIGHT
+    ctx.fillText(line, marginX, cursorY)
+  })
 
+  // Tagline — previously drawn as one unwrapped line, which ran a longer
+  // rating verdict or Pick For Me reason straight off the right edge of
+  // the canvas (confirmed via an actual rendered screenshot). Now wrapped
+  // the same way as the title.
+  cursorY += 48
   ctx.fillStyle = theme.muted
   ctx.font = '500 26px "Manrope"'
-  const taglineY = lineY + 48
-  ctx.fillText(tagline, marginX, taglineY)
+  const taglineLines = wrapText(ctx, tagline, maxWidth, TAGLINE_MAX_LINES)
+  taglineLines.forEach((line, i) => {
+    if (i > 0) cursorY += TAGLINE_LINE_HEIGHT
+    ctx.fillText(line, marginX, cursorY)
+  })
 
-  drawFooter(ctx, theme, taglineY + 40, shareUrl)
+  drawFooter(ctx, theme, cursorY + 40, shareUrl, marginX)
 
   return canvasToBlob(canvas)
 }
