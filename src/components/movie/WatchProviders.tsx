@@ -7,14 +7,17 @@ function ProviderRow({ label, items }: { label: string; items: TmdbWatchProvider
   return (
     <div className="flex flex-col gap-2">
       <p className="font-mono text-[11px] tracking-wide text-muted-subtle uppercase">{label}</p>
-      <div className="flex flex-wrap gap-2">
+      {/* Horizontally scrollable rather than wrapping (live-review
+          redesign) — same "row, not a wall" treatment as Cast and
+          MovieRow's Trending/Now Playing. */}
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {items.map((provider) => {
           const logoUrl = tmdbImageUrl(provider.logo_path, 'w92')
           return (
             <div
               key={provider.provider_id}
               title={provider.provider_name}
-              className="h-11 w-11 overflow-hidden rounded-md border border-border bg-surface transition-transform duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:-translate-y-0.5"
+              className="h-11 w-11 shrink-0 overflow-hidden rounded-md border border-border bg-surface transition-transform duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:-translate-y-0.5"
             >
               {logoUrl && <img src={logoUrl} alt={provider.provider_name} className="h-full w-full object-cover" />}
             </div>

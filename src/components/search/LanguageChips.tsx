@@ -24,7 +24,10 @@ interface LanguageChipsProps {
 
 export function LanguageChips({ value, onChange }: LanguageChipsProps) {
   return (
-    <div className="flex flex-wrap gap-2">
+    // Single horizontally scrolling row rather than wrapping (live-review
+    // redesign) — 12 chips wrapped to 3-4 lines was real vertical tax on
+    // mobile above the results.
+    <div className="flex gap-2 overflow-x-auto pb-1">
       {LANGUAGES.map((lang) => {
         const active = value === lang.code
         return (
@@ -33,7 +36,7 @@ export function LanguageChips({ value, onChange }: LanguageChipsProps) {
             type="button"
             aria-pressed={active}
             onClick={() => onChange(lang.code)}
-            className={`rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
+            className={`shrink-0 rounded-full border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
               active
                 ? 'border-accent-warm bg-accent-warm/15 font-semibold text-accent-warm'
                 : 'border-border text-muted hover:text-text'

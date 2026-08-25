@@ -142,15 +142,20 @@ export default function Search() {
 
       <DiscoverTabs />
 
-      <div className="-mt-4 w-full max-w-2xl">
-        <input
-          type="search"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search for a movie…"
-          autoFocus
-          className="w-full rounded-lg border border-border bg-surface px-5 py-4 font-ui text-base text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted/70 focus:border-accent-cold"
-        />
+      {/* Pinned under the app bar (live-review redesign) — sticky at the
+          same top-14 offset Watchlist's tabs use, so the search field is
+          always reachable without scrolling back up. */}
+      <div className="sticky top-14 z-30 -mx-6 -mt-4 bg-bg/80 px-6 py-2 backdrop-blur sm:-mx-10 sm:px-10 lg:static lg:mx-0 lg:bg-transparent lg:px-0 lg:py-0 lg:backdrop-blur-none">
+        <div className="w-full max-w-2xl">
+          <input
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search for a movie…"
+            autoFocus
+            className="w-full rounded-lg border border-border bg-surface px-5 py-4 font-ui text-base text-text outline-none transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] placeholder:text-muted/70 focus:border-accent-cold"
+          />
+        </div>
       </div>
 
       <div className="flex w-full flex-col gap-4">
@@ -176,7 +181,7 @@ export default function Search() {
             )}
 
             {searchStatus === 'success' && searchResults.length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6 lg:gap-4">
                 {searchResults.map((movie) => (
                   <SearchResultCard key={movie.id} movie={movie} />
                 ))}
@@ -205,7 +210,7 @@ export default function Search() {
             )}
 
             {discoverStatus === 'success' && discoverResults.length > 0 && (
-              <div className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6 lg:gap-4">
                 {discoverResults.map((movie) => (
                   <SearchResultCard key={movie.id} movie={movie} />
                 ))}

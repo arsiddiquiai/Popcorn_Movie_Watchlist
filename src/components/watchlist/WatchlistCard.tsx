@@ -1,8 +1,10 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { decayHairlineWidth, decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
 import { formatRuntime } from '../../lib/format'
 import { isFavoriteScore, mix, rgbString } from '../../lib/ratingScale'
+import { posterLayoutId } from '../../lib/sharedElement'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import type { WatchlistEntry } from '../../lib/watchlist'
 import { refreshAddedAt, removeFromWatchlist } from '../../lib/watchlist'
@@ -116,7 +118,8 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
     >
       <div className="relative aspect-[2/3] overflow-hidden rounded-poster bg-surface shadow-none transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-active:shadow-[var(--shadow-lift)]">
         {posterUrl ? (
-          <img
+          <motion.img
+            layoutId={posterLayoutId(movie.tmdb_id)}
             src={posterUrl}
             alt={movie.title}
             loading="lazy"

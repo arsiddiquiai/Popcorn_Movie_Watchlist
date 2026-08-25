@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
-import { motion } from 'framer-motion'
+import { BottomSheet } from '../ui/BottomSheet'
 import { getMovieGenres, type DiscoverSort, type TmdbGenre } from '../../lib/tmdbClient'
-import { useTheme } from '../../theme/ThemeProvider'
 
 export interface AdvancedFilters {
   genreIds: number[]
@@ -48,8 +47,7 @@ interface FilterBarProps {
 type GenreStatus = 'idle' | 'loading' | 'success' | 'error'
 
 export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
-  const { reducedMotion } = useTheme()
-  const [expanded, setExpanded] = useState(false)
+  const [open, setOpen] = useState(false)
   const [genres, setGenres] = useState<TmdbGenre[]>([])
   const [genreStatus, setGenreStatus] = useState<GenreStatus>('idle')
   const [retryToken, setRetryToken] = useState(0)
@@ -65,7 +63,7 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
   const hasStartedFetch = useRef(false)
 
   useEffect(() => {
-    if (!expanded || hasStartedFetch.current) return
+    if (!open || hasStartedFetch.current) return
     hasStartedFetch.current = true
     let cancelled = false
     setGenreStatus('loading')
@@ -81,7 +79,7 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
     return () => {
       cancelled = true
     }
-  }, [expanded, retryToken])
+  }, [open, retryToken])
 
   function retryGenres() {
     hasStartedFetch.current = false
@@ -98,7 +96,7 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
   const isActive = hasActiveAdvancedFilters(filters)
 
   const panel = (
-    <div className="flex flex-col gap-4 border-t border-border pt-4">
+    <div className="flex flex-col gap-4">
       {disabled && (
         <p className="font-ui text-xs text-muted">Clear your search to use these filters — they don't apply to text search.</p>
       )}
@@ -222,30 +220,22 @@ export function FilterBar({ filters, onChange, disabled }: FilterBarProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Opens as a bottom sheet now rather than an inline expanding panel
+          (live-review redesign) — six filter controls pushing the results
+          grid down every time they were open was real vertical tax. */}
       <button
         type="button"
-        onClick={() => setExpanded((prev) => !prev)}
+        onClick={() => setOpen(true)}
         className={`inline-flex w-fit items-center gap-1.5 rounded-lg border px-3 py-1.5 font-ui text-xs transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
           isActive ? 'border-accent-warm text-accent-warm' : 'border-border text-muted hover:text-text'
         }`}
       >
         Filters{isActive ? ` · ${filters.genreIds.length + [filters.yearFrom, filters.yearTo, filters.minRating].filter((v) => v !== null).length + (filters.sortBy !== 'popularity.desc' ? 1 : 0)}` : ''}
-        <span aria-hidden="true">{expanded ? '▲' : '▼'}</span>
       </button>
 
-      {expanded &&
-        (reducedMotion ? (
-          panel
-        ) : (
-          <motion.div
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="overflow-hidden"
-          >
-            {panel}
-          </motion.div>
-        ))}
+      <BottomSheet open={open} onClose={() => setOpen(false)} title="Filters">
+        {panel}
+      </BottomSheet>
     </div>
   )
 }

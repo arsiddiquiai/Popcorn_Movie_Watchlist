@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { Section } from '../components/layout/Page'
+import { BottomSheet } from '../components/ui/BottomSheet'
 import { RatingPanel } from '../components/rating/RatingPanel'
 import { ReactivePoster, type PosterRelease } from '../components/rating/ReactivePoster'
 import { WatchProviders } from '../components/movie/WatchProviders'
@@ -22,7 +23,7 @@ interface StoredCastMember {
 
 function getTopCast(credits: Json | null): StoredCastMember[] {
   const cast = (credits as { cast?: StoredCastMember[] } | null)?.cast
-  return Array.isArray(cast) ? cast.slice(0, 5).filter((member) => typeof member?.name === 'string') : []
+  return Array.isArray(cast) ? cast.slice(0, 8).filter((member) => typeof member?.name === 'string') : []
 }
 
 function CenteredMessage({ children }: { children: ReactNode }) {
@@ -42,13 +43,15 @@ export default function MovieDetail() {
   const [movie, setMovie] = useState<MovieCache | null>(null)
   const [watchlistItem, setWatchlistItem] = useState<WatchlistItem | null>(null)
   const [rating, setRating] = useState<Rating | null>(null)
-  // Live slider value, lifted here so the poster below can react to it.
+  // Live slider value, lifted here so the poster hero above can react to
+  // it — only meaningful while the rating bottom sheet is open.
   const [liveScore, setLiveScore] = useState<number | null>(null)
   const [release, setRelease] = useState<PosterRelease>({ effect: null, token: 0 })
   const [retryKey, setRetryKey] = useState(0)
   const [actionPending, setActionPending] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const [shareMessage, setShareMessage] = useState<string | null>(null)
+  const [ratingSheetOpen, setRatingSheetOpen] = useState(false)
 
   useEffect(() => {
     if (!isValidId) {
@@ -155,73 +158,75 @@ export default function MovieDetail() {
 
   if (!movie) return null
 
-  const posterUrl = tmdbImageUrl(movie.poster_path, 'w342')
-  const backdropUrl = tmdbImageUrl(movie.backdrop_path, 'w1280')
+  const posterUrl = tmdbImageUrl(movie.poster_path, 'w500')
   const runtime = formatRuntime(movie.runtime_minutes)
   const topCast = getTopCast(movie.credits)
 
+  // The one pinned .btn-hero action (live-review redesign) — mutually
+  // exclusive with the watchlist status, so there's only ever one. Once
+  // watched, rating replaces add/mark-watched as the primary thing left to
+  // do, and opens the bottom sheet rather than rendering inline.
+  const primaryAction =
+    !watchlistItem || watchlistItem.status === 'dropped'
+      ? { label: 'Add to Watchlist', onClick: () => runAction(async () => void (await addToWatchlist(tmdbId, user!.id))) }
+      : watchlistItem.status === 'want'
+        ? { label: 'Mark as Watched', onClick: () => runAction(() => markAsWatched(watchlistItem.id)) }
+        : {
+            label: rating ? `Your rating: ${rating.score}/10 · ${verdictFor(rating.score)}` : 'Rate this film',
+            onClick: () => setRatingSheetOpen(true),
+          }
+
   return (
-    <div className="flex min-h-screen flex-col">
-      {/* Hero. The backdrop used to hard-cut into the page background, reading
-          as two unrelated blocks stacked on each other. It now fades into --bg
-          through a scrim, and the poster and title overlap that fade — the
-          poster-forward treatment CLAUDE.md asks for, and what makes this read
-          as a film page rather than a form. */}
+    <div className="flex min-h-screen flex-col pb-28 lg:pb-14">
+      {/* Full-bleed poster hero with a gradient scrim into --bg, title/
+          metadata overlaid on the scrim (live-review redesign — this used
+          to be a 21:9 backdrop with a small poster overlapping below it).
+          The poster itself is ReactivePoster, which carries the shared
+          layoutId transition from wherever the user tapped in. */}
       <header className="relative">
-        {backdropUrl ? (
-          <div className="relative aspect-[21/9] max-h-[52vh] w-full overflow-hidden bg-surface">
-            <img src={backdropUrl} alt="" className="h-full w-full object-cover" />
-            <div className="absolute inset-0 bg-gradient-to-t from-bg via-bg/70 to-bg/10" />
-            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-bg to-transparent" />
-          </div>
-        ) : (
-          <div className="h-28 w-full bg-surface" />
-        )}
+        <ReactivePoster
+          tmdbId={tmdbId}
+          posterUrl={posterUrl}
+          title={movie.title}
+          score={liveScore}
+          release={release}
+          reducedMotion={reducedMotion}
+        />
 
-        <div className="mx-auto w-full max-w-5xl px-6 sm:px-10">
-          <div className="-mt-24 flex flex-col gap-6 md:-mt-32 md:flex-row md:items-end">
-            <ReactivePoster
-              posterUrl={posterUrl}
-              title={movie.title}
-              score={liveScore}
-              release={release}
-              reducedMotion={reducedMotion}
-            />
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 px-6 pb-6 sm:px-10 sm:pb-10">
+          <div className="pointer-events-auto mx-auto flex w-full max-w-5xl flex-col gap-3">
+            <h1 className="font-display text-3xl leading-[1.05] font-bold tracking-tight text-text sm:text-5xl">
+              {movie.title}
+            </h1>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-3 pb-1">
-              <h1 className="font-display text-4xl leading-[1.05] font-bold tracking-tight text-text sm:text-5xl">
-                {movie.title}
-              </h1>
-
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-xs tracking-wide text-muted uppercase">
-                <span>{movie.release_year ?? '—'}</span>
-                {runtime && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>{runtime}</span>
-                  </>
-                )}
-                {typeof movie.tmdb_rating === 'number' && movie.tmdb_rating > 0 && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span className="text-accent-warm">TMDB {movie.tmdb_rating.toFixed(1)}</span>
-                  </>
-                )}
-              </div>
-
-              {movie.genres && movie.genres.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {movie.genres.map((genre) => (
-                    <span
-                      key={genre}
-                      className="rounded-full border border-border bg-surface/70 px-3 py-1 font-ui text-xs text-muted backdrop-blur-sm"
-                    >
-                      {genre}
-                    </span>
-                  ))}
-                </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 font-mono text-xs tracking-wide text-muted uppercase">
+              <span>{movie.release_year ?? '—'}</span>
+              {runtime && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span>{runtime}</span>
+                </>
+              )}
+              {typeof movie.tmdb_rating === 'number' && movie.tmdb_rating > 0 && (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <span className="text-accent-warm">TMDB {movie.tmdb_rating.toFixed(1)}</span>
+                </>
               )}
             </div>
+
+            {movie.genres && movie.genres.length > 0 && (
+              <div className="flex flex-wrap gap-2">
+                {movie.genres.map((genre) => (
+                  <span
+                    key={genre}
+                    className="rounded-full border border-border bg-surface/70 px-3 py-1 font-ui text-xs text-muted backdrop-blur-sm"
+                  >
+                    {genre}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </header>
@@ -231,29 +236,21 @@ export default function MovieDetail() {
           <p className="max-w-prose font-ui text-base leading-relaxed text-text">{movie.overview}</p>
         )}
 
+        {/* Secondary actions — the one primary action lives in the pinned
+            bar below (mobile) / inline button (desktop) instead. */}
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            {(!watchlistItem || watchlistItem.status === 'dropped') && (
-              <button
-                type="button"
-                disabled={actionPending}
-                onClick={() => runAction(async () => void (await addToWatchlist(tmdbId, user!.id)))}
-                className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
-              >
-                Add to Watchlist
-              </button>
-            )}
-
-            {watchlistItem?.status === 'want' && (
-              <button
-                type="button"
-                disabled={actionPending}
-                onClick={() => runAction(() => markAsWatched(watchlistItem.id))}
-                className="btn-hero rounded-full px-6 py-3 font-ui text-sm font-semibold"
-              >
-                Mark as Watched
-              </button>
-            )}
+            {/* Desktop has no pinned bar to clear, so the primary action
+                also renders inline here — same `primaryAction` data, not a
+                second implementation of it. */}
+            <button
+              type="button"
+              disabled={actionPending}
+              onClick={primaryAction.onClick}
+              className="btn-hero hidden rounded-full px-6 py-3 font-ui text-sm font-semibold lg:inline-flex"
+            >
+              {primaryAction.label}
+            </button>
 
             {(watchlistItem?.status === 'want' || watchlistItem?.status === 'watched') && (
               <button
@@ -281,7 +278,72 @@ export default function MovieDetail() {
           {actionError && <p className="font-ui text-xs text-accent-cold">{actionError}</p>}
         </div>
 
-        {watchlistItem?.status === 'watched' && user && (
+        {movie.trailer_key && (
+          <Section title="Trailer">
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-surface">
+              <iframe
+                src={`https://www.youtube.com/embed/${movie.trailer_key}`}
+                title={`${movie.title} trailer`}
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="h-full w-full"
+              />
+            </div>
+          </Section>
+        )}
+
+        {/* Cast and Watch Providers are horizontally scrollable rows now
+            (live-review redesign) rather than a stacked wall of full-width
+            blocks — same treatment MovieRow already uses for Trending/Now
+            Playing on Search. */}
+        {topCast.length > 0 && (
+          <Section title="Cast">
+            <div className="flex gap-3 overflow-x-auto pb-2">
+              {topCast.map((member, index) => (
+                <div
+                  key={index}
+                  className="flex w-40 shrink-0 flex-col gap-0.5 rounded-lg border border-border bg-surface px-3 py-2.5"
+                >
+                  <span className="truncate font-ui text-sm font-medium text-text" title={member.name}>
+                    {member.name}
+                  </span>
+                  {member.character && (
+                    <span className="truncate font-ui text-xs text-muted" title={member.character}>
+                      {member.character}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Section>
+        )}
+
+        <WatchProviders tmdbId={tmdbId} />
+      </div>
+
+      {/* The one pinned .btn-hero action, mobile only — sits above the
+          TabBar (64px + safe-area, already reserved by AppShell's own
+          bottom padding on <main>) rather than inline in the page body. */}
+      <div
+        className="fixed inset-x-0 z-30 border-t border-border bg-bg/90 px-6 py-3 backdrop-blur lg:hidden"
+        style={{ bottom: 'calc(64px + env(safe-area-inset-bottom))' }}
+      >
+        <button
+          type="button"
+          disabled={actionPending}
+          onClick={primaryAction.onClick}
+          className="btn-hero w-full rounded-full py-3.5 font-ui text-sm font-semibold disabled:opacity-60"
+        >
+          {primaryAction.label}
+        </button>
+      </div>
+
+      {/* Rating panel — a bottom sheet now instead of sitting inline in the
+          page body (live-review redesign). RatingPanel itself is
+          completely untouched: same save-on-release behaviour, same
+          cold->warm colour interpolation, same why-chips/review note. */}
+      {watchlistItem?.status === 'watched' && user && (
+        <BottomSheet open={ratingSheetOpen} onClose={() => setRatingSheetOpen(false)} title="Rate this film">
           <RatingPanel
             tmdbId={tmdbId}
             userId={user.id}
@@ -292,42 +354,8 @@ export default function MovieDetail() {
             }
             onRatingSaved={setRating}
           />
-        )}
-
-        {/* Trailer and cast sit side by side on wide screens. Previously every
-            one of these blocks was trapped in the narrow column beside the
-            poster, leaving a tall empty gutter underneath it. */}
-        <div className={`grid gap-10 ${movie.trailer_key && topCast.length > 0 ? 'lg:grid-cols-[1.6fr_1fr]' : ''}`}>
-          {movie.trailer_key && (
-            <Section title="Trailer">
-              <div className="aspect-video w-full overflow-hidden rounded-lg border border-border bg-surface">
-                <iframe
-                  src={`https://www.youtube.com/embed/${movie.trailer_key}`}
-                  title={`${movie.title} trailer`}
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                  className="h-full w-full"
-                />
-              </div>
-            </Section>
-          )}
-
-          {topCast.length > 0 && (
-            <Section title="Cast">
-              <ul className="flex flex-col gap-2.5">
-                {topCast.map((member, index) => (
-                  <li key={index} className="font-ui text-sm leading-snug">
-                    <span className="text-text">{member.name}</span>
-                    {member.character && <span className="text-muted"> as {member.character}</span>}
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
-        </div>
-
-        <WatchProviders tmdbId={tmdbId} />
-      </div>
+        </BottomSheet>
+      )}
     </div>
   )
 }

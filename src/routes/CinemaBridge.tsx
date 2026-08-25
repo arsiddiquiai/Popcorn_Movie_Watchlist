@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { SourceMoviePicker } from '../components/bridge/SourceMoviePicker'
@@ -7,7 +8,8 @@ import { DiscoverTabs } from '../components/layout/DiscoverTabs'
 import type { MovieCache } from '../lib/database.types'
 import { BridgeError, requestBridge, type BridgeMatch, type BridgeResult } from '../lib/bridgeClient'
 import { formatRuntime } from '../lib/format'
-import { tmdbImageUrl, type TmdbSearchMovie } from '../lib/tmdbClient'
+import { posterLayoutId } from '../lib/sharedElement'
+import { searchMovies, tmdbImageUrl, type TmdbSearchMovie } from '../lib/tmdbClient'
 import { addToWatchlist, getOrCacheMovie } from '../lib/watchlist'
 
 type Phase = 'form' | 'loading' | 'result' | 'no_matches' | 'error'
@@ -16,6 +18,15 @@ type AddState = 'idle' | 'loading' | 'added' | 'error'
 interface ResolvedMatch extends BridgeMatch {
   movie: MovieCache
 }
+
+// DESIGN.md's own example ("Drishyam -> its Korean equivalent") plus two
+// more varied ones, so the empty form state is never half-empty — tapping
+// one resolves the title via TMDB search, fills the form, and submits.
+const EXAMPLE_BRIDGES = [
+  { title: 'Drishyam', target: 'Korean' },
+  { title: 'Parasite', target: 'Bollywood' },
+  { title: 'Whiplash', target: 'Tamil' },
+] as const
 
 export default function CinemaBridge() {
   const { user } = useAuth()
@@ -26,17 +37,24 @@ export default function CinemaBridge() {
   const [retryable, setRetryable] = useState(true)
   const [matches, setMatches] = useState<ResolvedMatch[]>([])
   const [addState, setAddState] = useState<Record<number, AddState>>({})
+  const [exampleLoading, setExampleLoading] = useState<string | null>(null)
 
   const canSubmit = Boolean(sourceMovie) && target.trim().length > 0
 
-  async function handleSubmit() {
-    if (!sourceMovie || !target.trim() || !user) return
+  // Accepts explicit overrides so an example-bridge tap can submit
+  // immediately with the film/target it just resolved, rather than reading
+  // sourceMovie/target from state that setSourceMovie/setTarget haven't
+  // actually applied yet (React state updates aren't synchronous).
+  async function handleSubmit(overrideSource?: TmdbSearchMovie, overrideTarget?: string) {
+    const source = overrideSource ?? sourceMovie
+    const targetValue = overrideTarget ?? target
+    if (!source || !targetValue.trim() || !user) return
     setPhase('loading')
     setErrorMessage(null)
     setAddState({})
 
     try {
-      const result = await requestBridge({ source_tmdb_id: sourceMovie.id, target: target.trim() })
+      const result = await requestBridge({ source_tmdb_id: source.id, target: targetValue.trim() })
       if ('kind' in result) {
         setErrorMessage((result as { message: string }).message)
         setPhase('no_matches')
@@ -69,6 +87,21 @@ export default function CinemaBridge() {
       setErrorMessage(err instanceof BridgeError ? err.message : 'Something went wrong.')
       setRetryable(err instanceof BridgeError ? err.retryable : true)
       setPhase('error')
+    }
+  }
+
+  async function handleExampleTap(example: (typeof EXAMPLE_BRIDGES)[number]) {
+    if (exampleLoading) return
+    setExampleLoading(example.title)
+    try {
+      const results = await searchMovies(example.title)
+      const movie = results[0]
+      if (!movie) return
+      setSourceMovie(movie)
+      setTarget(example.target)
+      await handleSubmit(movie, example.target)
+    } finally {
+      setExampleLoading(null)
     }
   }
 
@@ -129,39 +162,71 @@ export default function CinemaBridge() {
         </form>
       )}
 
+      {/* Tappable example bridges so the empty form is never half-empty
+          (DESIGN.md §8's own "Drishyam -> its Korean equivalent" example,
+          plus two more) — hidden once a source film is picked, since at
+          that point they'd just be redundant with the form above. */}
+      {phase === 'form' && !sourceMovie && (
+        <div className="flex w-full max-w-xl flex-col gap-3">
+          <p className="font-ui text-xs text-muted">Or try one of these</p>
+          <div className="flex flex-col gap-2">
+            {EXAMPLE_BRIDGES.map((example) => (
+              <button
+                key={example.title}
+                type="button"
+                onClick={() => void handleExampleTap(example)}
+                disabled={Boolean(exampleLoading)}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-4 py-3 text-left font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 disabled:opacity-60"
+              >
+                <span>
+                  {example.title} <span className="text-muted">→ its {example.target} equivalent</span>
+                </span>
+                <span aria-hidden="true" className="shrink-0 text-muted">
+                  {exampleLoading === example.title ? '…' : '→'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {phase === 'result' && (
         <div className="flex w-full max-w-2xl flex-col gap-4">
           {matches.map((match) => {
-            const posterUrl = tmdbImageUrl(match.movie.poster_path, 'w185')
+            const sourcePosterUrl = sourceMovie ? tmdbImageUrl(sourceMovie.poster_path, 'w185') : null
+            const resultPosterUrl = tmdbImageUrl(match.movie.poster_path, 'w185')
             const runtime = formatRuntime(match.movie.runtime_minutes)
             const state = addState[match.tmdb_id] ?? 'idle'
             return (
+              // Side-by-side comparison (live-review redesign) rather than
+              // a single poster next to a text block — source and result
+              // posters bookending the reasoning is the actual point of a
+              // "bridge", so the layout should read as one now.
               <div
                 key={match.tmdb_id}
-                className="flex gap-4 rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
+                className="grid grid-cols-[1fr_1.3fr_1fr] items-start gap-3 rounded-lg border border-border bg-surface p-4 shadow-[var(--shadow-sm)]"
               >
-                <div className="aspect-[2/3] w-20 shrink-0 overflow-hidden rounded-lg bg-bg sm:w-24">
-                  {posterUrl ? (
-                    <img src={posterUrl} alt={match.movie.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center px-1 text-center font-ui text-[10px] text-muted">
-                      {match.movie.title}
-                    </div>
-                  )}
-                </div>
-                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-                  <h3 className="font-display text-lg font-semibold text-text">{match.movie.title}</h3>
-                  <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-muted-subtle">
-                    <span>{match.movie.release_year ?? '—'}</span>
-                    {runtime && (
-                      <>
-                        <span aria-hidden="true">·</span>
-                        <span>{runtime}</span>
-                      </>
+                <div className="flex flex-col gap-1.5">
+                  <div className="aspect-[2/3] w-full overflow-hidden rounded-lg bg-bg">
+                    {sourcePosterUrl ? (
+                      <img src={sourcePosterUrl} alt={sourceMovie?.title ?? ''} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center px-1 text-center font-ui text-[10px] text-muted">
+                        {sourceMovie?.title}
+                      </div>
                     )}
                   </div>
-                  <p className="font-ui text-sm leading-relaxed text-muted">{match.reason}</p>
-                  <div className="mt-1 flex items-center gap-3">
+                  <span className="truncate text-center font-ui text-[11px] text-muted-subtle" title={sourceMovie?.title}>
+                    {sourceMovie?.title}
+                  </span>
+                </div>
+
+                <div className="flex flex-col items-center gap-2 pt-4 text-center">
+                  <span aria-hidden="true" className="font-display text-lg text-accent-warm">
+                    →
+                  </span>
+                  <p className="font-ui text-xs leading-relaxed text-muted">{match.reason}</p>
+                  <div className="mt-1 flex flex-col items-center gap-2">
                     {state === 'added' ? (
                       <span className="font-ui text-xs font-semibold text-accent-warm">Added ✓</span>
                     ) : (
@@ -171,17 +236,36 @@ export default function CinemaBridge() {
                         disabled={state === 'loading'}
                         className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-3 py-1.5 font-ui text-xs font-semibold text-accent-warm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 disabled:opacity-60"
                       >
-                        {state === 'loading' ? 'Adding…' : state === 'error' ? 'Retry add' : 'Add to Watchlist'}
+                        {state === 'loading' ? 'Adding…' : state === 'error' ? 'Retry add' : 'Add'}
                       </button>
                     )}
-                    <Link
-                      to={`/movie/${match.tmdb_id}`}
-                      className="font-ui text-xs text-muted underline underline-offset-4 hover:text-text"
-                    >
-                      Full details
-                    </Link>
                   </div>
                 </div>
+
+                <Link to={`/movie/${match.tmdb_id}`} className="group flex flex-col gap-1.5">
+                  <div className="aspect-[2/3] w-full overflow-hidden rounded-lg bg-bg transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] group-hover:-translate-y-1">
+                    {resultPosterUrl ? (
+                      <motion.img
+                        layoutId={posterLayoutId(match.tmdb_id)}
+                        src={resultPosterUrl}
+                        alt={match.movie.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center px-1 text-center font-ui text-[10px] text-muted">
+                        {match.movie.title}
+                      </div>
+                    )}
+                  </div>
+                  <span className="truncate text-center font-ui text-[11px] text-text" title={match.movie.title}>
+                    {match.movie.title}
+                  </span>
+                  {runtime && (
+                    <span className="text-center font-mono text-[10px] uppercase tracking-wide text-muted-subtle">
+                      {match.movie.release_year ?? '—'} · {runtime}
+                    </span>
+                  )}
+                </Link>
               </div>
             )
           })}
