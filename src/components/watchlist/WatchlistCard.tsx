@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
+import { decayHairlineWidth, decayPosterStyle, DECAY_RESCUE_THRESHOLD } from '../../lib/decay'
 import { formatRuntime } from '../../lib/format'
-import { isFavoriteScore } from '../../lib/ratingScale'
+import { isFavoriteScore, mix, rgbString } from '../../lib/ratingScale'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import type { WatchlistEntry } from '../../lib/watchlist'
 import { refreshAddedAt, removeFromWatchlist } from '../../lib/watchlist'
 import { useTheme } from '../../theme/ThemeProvider'
+import { useDecayColors } from './useDecayColors'
 
 /** Session-only dismissal for the rescue-or-bury prompt — "don't be naggy"
  *  per CLAUDE.md, but this doesn't need a new DB column: a browser tab
@@ -33,39 +34,43 @@ function dismiss(itemId: string): void {
 
 interface WatchlistCardProps {
   entry: WatchlistEntry
-  /** 0 (fresh) to 1 (fully decayed) — only meaningful on the "want" tab.
+  /** 0 (fresh) to 1 (fully decayed) — only meaningful when decayEnabled.
    *  Undefined/0 renders identically to the pre-decay card. */
   decayLevel?: number
+  /** Whether this card sits on the decay shelf at all (the "want" tab) —
+   *  gates the hairline and the rescue-or-bury prompt, neither of which
+   *  mean anything once a movie is watched. */
+  decayEnabled?: boolean
   /** Called after "Keep it" or "Remove" succeeds, so the parent list can
    *  update its source-of-truth entries (new added_at, or drop the item). */
   onDecayResolved?: (itemId: string, action: 'kept' | 'removed', newAddedAt?: string) => void
 }
 
-export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: WatchlistCardProps) {
+export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onDecayResolved }: WatchlistCardProps) {
   const { movie, score, item } = entry
   const posterUrl = tmdbImageUrl(movie.poster_path, 'w342')
   const runtime = formatRuntime(movie.runtime_minutes)
   const { reducedMotion } = useTheme()
+  const decayColors = useDecayColors()
   const [pending, setPending] = useState(false)
   const [dismissed, setDismissed] = useState(() => isDismissed(item.id))
 
-  const decayed = decayLevel > 0
-  const rescueEligible = decayLevel >= DECAY_RESCUE_THRESHOLD && !dismissed
-  // Applied unconditionally (decayLevel 0 resolves to saturate(100%)/opacity
-  // 1, visually identical to no style at all) rather than only when
-  // decayed, so the filter/opacity/transition properties are already
-  // present on the element when decayLevel changes — e.g. after "Keep it"
-  // resets it to 0 — letting the transition actually animate between
-  // values instead of the properties just disappearing.
+  const decayed = decayEnabled && decayLevel > 0
+  const rescueEligible = decayEnabled && decayLevel >= DECAY_RESCUE_THRESHOLD && !dismissed
+  const hairlineWidth = decayHairlineWidth(decayLevel)
+  const hairlineColor = rgbString(mix(decayColors.fresh, decayColors.decayed, Math.min(1, Math.max(0, decayLevel))))
+  // Applied unconditionally (decayLevel 0 resolves to the "fresh" no-op
+  // filter) rather than only when decayed, so the filter/transition
+  // properties are already present on the element when decayLevel changes
+  // — e.g. after "Keep it" resets it to 0 — letting the transition actually
+  // animate between values instead of the properties just disappearing.
   //
   // The decayed state itself stays visible regardless of reduced-motion —
   // it's a static state, not motion. Only the transition INTO/OUT OF it is
   // gated, per CLAUDE.md's reduced-motion rule.
   const posterStyle = {
     ...decayPosterStyle(decayLevel),
-    transition: reducedMotion
-      ? undefined
-      : 'filter var(--transition-slow) var(--ease-standard), opacity var(--transition-slow) var(--ease-standard)',
+    transition: reducedMotion ? undefined : 'filter var(--transition-slow) var(--ease-standard)',
   }
 
   async function handleKeep(event: React.MouseEvent) {
@@ -109,7 +114,7 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
       to={`/movie/${movie.tmdb_id}`}
       className="group flex flex-col gap-3 transition-transform duration-[var(--transition-base)] ease-[var(--ease-standard)] hover:-translate-y-1.5"
     >
-      <div className="relative aspect-[2/3] overflow-hidden rounded-lg border border-border bg-surface shadow-[var(--shadow-sm)] transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-hover:shadow-[var(--shadow-glow)]">
+      <div className="relative aspect-[2/3] overflow-hidden rounded-poster bg-surface shadow-none transition-shadow duration-[var(--transition-base)] ease-[var(--ease-standard)] group-active:shadow-[var(--shadow-lift)]">
         {posterUrl ? (
           <img
             src={posterUrl}
@@ -177,16 +182,26 @@ export function WatchlistCard({ entry, decayLevel = 0, onDecayResolved }: Watchl
             </div>
           </div>
         )}
+
+        {decayEnabled && (
+          // The decay hairline (DESIGN.md §1) — no numbers, no tooltip, just
+          // a line that shortens and cools as the movie sits unwatched.
+          <div
+            aria-hidden="true"
+            className="absolute bottom-0 left-1/2 h-px -translate-x-1/2 transition-[width,background-color] duration-[var(--transition-slow)] ease-[var(--ease-standard)]"
+            style={{ width: `${hairlineWidth}%`, backgroundColor: hairlineColor }}
+          />
+        )}
       </div>
 
       <div className="flex flex-col gap-1">
         <h3
-          className={`truncate font-display text-base font-semibold transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${decayed ? 'text-muted' : 'text-text'}`}
+          className={`line-clamp-2 font-ui text-[13px] leading-[1.25] font-semibold transition-colors duration-[var(--transition-base)] ease-[var(--ease-standard)] ${decayed ? 'text-muted' : 'text-text'}`}
           title={movie.title}
         >
           {movie.title}
         </h3>
-        <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wide text-muted-subtle">
+        <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-subtle">
           <span>{movie.release_year ?? '—'}</span>
           {runtime && (
             <>

@@ -58,7 +58,9 @@ export function parseCssColor(value: string): Rgb {
   return { r: 128, g: 128, b: 128 }
 }
 
-function mix(a: Rgb, b: Rgb, t: number): Rgb {
+/** Exported for other continuous colour interpolations that don't need the
+ *  full cold->neutral->warm rating sweep below (e.g. the decay hairline). */
+export function mix(a: Rgb, b: Rgb, t: number): Rgb {
   return {
     r: Math.round(a.r + (b.r - a.r) * t),
     g: Math.round(a.g + (b.g - a.g) * t),

@@ -262,6 +262,9 @@
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-xl: 28px;
+  /* Poster cards specifically (DESIGN.md §3) — slightly tighter than
+     --radius-md, which reads a touch too soft at 3-up on mobile. */
+  --radius-poster: 12px;
 
   --shadow-sm: 0 2px 8px rgb(0 0 0 / 0.4);
   --shadow-lift: 0 18px 40px -12px rgb(0 0 0 / 0.75);

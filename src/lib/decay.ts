@@ -33,19 +33,49 @@ export function decayLevelForAddedAt(addedAt: string, now?: Date): number {
 export const DECAY_RESCUE_THRESHOLD = 1
 
 /**
- * The poster's decay treatment: desaturation + a slight opacity drop, never
- * full greyscale (should read "neglected", not "broken" — CLAUDE.md's own
- * distinction) and never a particle/grain effect, which the project's
- * motion rules explicitly rule out for anything demoed over screen share.
- *
- * Saturation floors at 35% rather than 0 for the same reason; opacity floors
- * at 0.75, within the spec's 70-80% range.
+ * The four named decay stages (DESIGN.md §1), promoted from a styling
+ * side-effect to the app's signature element. Never full greyscale/opacity
+ * (should read "neglected", not "broken") and never a particle/grain effect,
+ * which the project's motion rules explicitly rule out for anything demoed
+ * over screen share.
  */
-export function decayPosterStyle(decayLevel: number): { filter: string; opacity: number } {
+export type DecayStage = 'fresh' | 'settling' | 'stale' | 'graveyard'
+
+const STAGE_FILTERS: Record<DecayStage, string> = {
+  fresh: 'none',
+  settling: 'saturate(0.85)',
+  stale: 'saturate(0.55) brightness(0.82)',
+  graveyard: 'saturate(0.15) brightness(0.6)',
+}
+
+/**
+ * Which stage a continuous decayLevel falls into. Boundaries mirror
+ * decayLevelForDays' own day breakpoints (7/30/60 days -> level 0/0.5/1),
+ * so a caller already holding a decayLevel can classify it without the
+ * original day count.
+ */
+export function decayStageForLevel(decayLevel: number): DecayStage {
+  if (decayLevel <= 0) return 'fresh'
+  if (decayLevel < 0.5) return 'settling'
+  if (decayLevel < 1) return 'stale'
+  return 'graveyard'
+}
+
+/** The poster's filter for its stage. Discrete (four fixed values), unlike
+ *  the hairline below — the CSS transition between values on stage change
+ *  is what makes it read as "settling", not the values themselves. */
+export function decayPosterStyle(decayLevel: number): { filter: string } {
+  return { filter: STAGE_FILTERS[decayStageForLevel(decayLevel)] }
+}
+
+/**
+ * Width (as a percentage of the poster's own width) of the 1px decay
+ * hairline at its base. Continuous rather than stage-based — "shortening
+ * and fading" is meant to read as a feeling, not a jump cut. Floors at 18%
+ * rather than 0 so a fully-decayed item still shows a sliver, not nothing.
+ */
+export function decayHairlineWidth(decayLevel: number): number {
   const level = Math.min(1, Math.max(0, decayLevel))
-  const MIN_SATURATION = 35
-  const MIN_OPACITY = 0.75
-  const saturation = 100 - level * (100 - MIN_SATURATION)
-  const opacity = 1 - level * (1 - MIN_OPACITY)
-  return { filter: `saturate(${saturation.toFixed(1)}%)`, opacity: Number(opacity.toFixed(3)) }
+  const MIN_WIDTH = 18
+  return 100 - level * (100 - MIN_WIDTH)
 }

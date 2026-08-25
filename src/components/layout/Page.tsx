@@ -64,7 +64,7 @@ export function PageHeader({
   return (
     <header className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
       <div className="min-w-0">
-        <h1 className="font-display text-3xl leading-[1.1] font-bold tracking-tight text-text sm:text-4xl">
+        <h1 className="font-display text-[28px] leading-[1.1] font-bold tracking-tight text-text">
           {title}
         </h1>
         {subtitle && <p className="mt-2 max-w-prose font-ui text-sm leading-relaxed text-muted">{subtitle}</p>}

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
+import { useAppBarAction } from '../components/layout/AppShell'
 import { KernelMark } from '../components/layout/Logo'
 import { Page, PageHeader } from '../components/layout/Page'
 import { PosterGridSkeleton } from '../components/ui/PosterGridSkeleton'
@@ -18,6 +19,33 @@ const tabs: { id: Tab; label: string }[] = [
   { id: 'watched', label: 'Watched' },
 ]
 
+/** Session-only "have they seen this before" flag (same reasoning as the
+ *  decay dismiss key in WatchlistCard — a browser restart is a fine point
+ *  to re-earn the subcopy, no DB column needed). Gates the subtitle per
+ *  DESIGN.md §3: visible only when the list is empty or on first visit. */
+const SUBCOPY_SEEN_KEY = 'popcorn:watchlist-subcopy-seen'
+
+function hasSeenSubcopy(): boolean {
+  try {
+    return sessionStorage.getItem(SUBCOPY_SEEN_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function DiceIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden="true">
+      <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+      <circle cx="8.25" cy="8.25" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.75" cy="8.25" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="12" cy="12" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="8.25" cy="15.75" r="1.15" fill="currentColor" stroke="none" />
+      <circle cx="15.75" cy="15.75" r="1.15" fill="currentColor" stroke="none" />
+    </svg>
+  )
+}
+
 export default function Watchlist() {
   const { user } = useAuth()
   const { reducedMotion } = useTheme()
@@ -26,6 +54,17 @@ export default function Watchlist() {
   const [entries, setEntries] = useState<WatchlistEntry[]>([])
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [surprising, setSurprising] = useState(false)
+  const [subcopySeen] = useState(hasSeenSubcopy)
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(SUBCOPY_SEEN_KEY, '1')
+    } catch {
+      // Private mode / quota — subcopy just shows again next load, fine.
+    }
+  }, [])
+
+  const showSubcopy = !subcopySeen || (status === 'success' && entries.length === 0)
 
   async function handleSurpriseMe() {
     if (surprising) return
@@ -37,6 +76,21 @@ export default function Watchlist() {
       setSurprising(false)
     }
   }
+
+  // Mobile: Surprise Me moves off the page body and into the app bar as an
+  // icon-button (DESIGN.md §3). Desktop keeps the labelled button below,
+  // since the sidebar layout has no app bar for this slot to live in.
+  useAppBarAction(
+    <button
+      type="button"
+      onClick={() => void handleSurpriseMe()}
+      disabled={surprising}
+      aria-label={surprising ? 'Picking a surprise' : 'Surprise me'}
+      className="grid h-9 w-9 place-items-center rounded-lg text-accent-warm transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/10 disabled:opacity-60"
+    >
+      <DiceIcon />
+    </button>,
+  )
 
   useEffect(() => {
     if (!user) return
@@ -63,27 +117,27 @@ export default function Watchlist() {
     <Page width="wide">
       <PageHeader
         title="My Watchlist"
-        subtitle="Everything you've saved — and everything quietly ageing out of it."
+        subtitle={showSubcopy ? "Everything you've saved — and everything quietly ageing out of it." : undefined}
         actions={
           <button
             type="button"
             onClick={() => void handleSurpriseMe()}
             disabled={surprising}
-            className="rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60"
+            className="hidden rounded-full border border-accent-warm/40 bg-accent-warm/10 px-4 py-2 font-ui text-sm font-semibold text-accent-warm transition-[background-color,border-color,transform] duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-accent-warm/20 active:scale-[0.97] disabled:opacity-60 md:inline-flex"
           >
             {surprising ? 'Picking…' : 'Surprise Me'}
           </button>
         }
       />
 
-      <div className="-mt-4 flex flex-wrap items-center justify-between gap-3">
-          <div className="inline-flex rounded-lg border border-border p-1">
+      <div className="sticky top-14 z-30 -mt-4 flex flex-wrap items-center justify-between gap-3 bg-bg/80 py-2 backdrop-blur md:static md:bg-transparent md:py-0 md:backdrop-blur-none">
+          <div className="inline-flex rounded-lg border border-border p-0.5">
             {tabs.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 onClick={() => setTab(t.id)}
-                className={`rounded-md px-4 py-1.5 font-ui text-sm transition-[background-color,color] duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
+                className={`rounded-md px-4 py-1 font-ui text-sm transition-[background-color,color] duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
                   tab === t.id ? 'bg-surface font-semibold text-text shadow-sm' : 'text-muted hover:text-text'
                 }`}
               >
@@ -136,7 +190,7 @@ export default function Watchlist() {
 
         {status === 'success' && entries.length > 0 && (
           <motion.div
-            className="grid grid-cols-2 gap-x-4 gap-y-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5"
+            className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6 lg:gap-4"
             initial={reducedMotion ? false : 'hidden'}
             animate="visible"
             variants={{ visible: { transition: { staggerChildren: 0.045 } } }}
@@ -151,6 +205,7 @@ export default function Watchlist() {
                   entry={entry}
                   // Decay only applies to "want" items — watched/dropped
                   // never decay, per spec.
+                  decayEnabled={tab === 'want'}
                   decayLevel={tab === 'want' ? decayLevelForAddedAt(entry.item.added_at) : 0}
                   onDecayResolved={(itemId, action, newAddedAt) => {
                     setEntries((prev) =>

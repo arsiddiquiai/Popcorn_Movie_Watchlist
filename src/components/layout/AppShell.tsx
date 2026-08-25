@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useLocation } from 'react-router-dom'
 import { useTheme } from '../../theme/ThemeProvider'
@@ -14,24 +14,44 @@ function MenuIcon() {
   )
 }
 
+// A slot the mobile app bar exposes for the current page's own primary
+// action (today: Watchlist's Surprise Me dice — DESIGN.md §3 moves it off
+// the page body and into the bar). Only one page owns the slot at a time;
+// registering unmounts the previous occupant's effect cleanup first, so
+// navigating away always clears it.
+const AppBarActionContext = createContext<(node: ReactNode) => void>(() => {})
+
+export function useAppBarAction(node: ReactNode) {
+  const setAction = useContext(AppBarActionContext)
+  useEffect(() => {
+    setAction(node)
+    return () => setAction(null)
+  }, [node, setAction])
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const { pathname } = useLocation()
   const { reducedMotion } = useTheme()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [barAction, setBarAction] = useState<ReactNode>(null)
   const mode = getActiveMode(pathname)
 
   return (
-    <div className="flex min-h-screen flex-col bg-bg text-text md:flex-row">
-      <header className="flex items-center justify-between border-b border-border bg-surface px-4 py-3 md:hidden">
+    <AppBarActionContext.Provider value={setBarAction}>
+      <div className="flex min-h-screen flex-col bg-bg text-text md:flex-row">
+      <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur md:hidden">
         <Logo />
-        <button
-          type="button"
-          onClick={() => setDrawerOpen(true)}
-          aria-label="Open menu"
-          className="rounded-lg p-2 text-text"
-        >
-          <MenuIcon />
-        </button>
+        <div className="flex items-center gap-1">
+          {barAction}
+          <button
+            type="button"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+            className="rounded-lg p-2 text-text"
+          >
+            <MenuIcon />
+          </button>
+        </div>
       </header>
 
       <div className="hidden md:block">
@@ -68,9 +88,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       </AnimatePresence>
 
       <main className={`min-w-0 flex-1 ${mainBackgroundForMode(mode)}`}>
-        {mode && <ModeHeader mode={mode} />}
+        {/* DESIGN.md §3: the full-width Discover/Decide band is removed on
+            mobile entirely — it's pure vertical tax above the fold there.
+            §4 replaces it on desktop with a quiet sidebar group label
+            instead of this banner; until that lands, desktop keeps the
+            existing band as-is. */}
+        {mode && (
+          <div className="hidden md:block">
+            <ModeHeader mode={mode} />
+          </div>
+        )}
         {children}
       </main>
     </div>
+    </AppBarActionContext.Provider>
   )
 }
