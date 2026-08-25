@@ -108,9 +108,10 @@ ai_sessions      id · user_id · mode(pick|bridge|taste|assistant) · mood_text
                  recommended_tmdb_id · reason_text · accepted(bool) · created_at
 feedback         id · user_id(nullable) · message · contact_email(nullable) · created_at
 user_api_keys    id · user_id · provider(anthropic|openai|gemini) · encrypted_key · model_pref · created_at
+share_links      token(pk, opaque) · user_id · created_at
 ```
 
-RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`.
+RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`.
 `movies_cache` is shared reference data, readable by any authenticated user; writable (insert-only) by any
 authenticated user, bounded by shape CHECK constraints — no client can update or delete an existing row.
 **Favorites are derived** (`score >= 9`) — do not add a favorites column or table.
@@ -123,6 +124,13 @@ authenticated user, bounded by shape CHECK constraints — no client can update 
 granted column for `authenticated` at all, at the Postgres column-privilege level, so no client query can ever
 return it, including the row's own owner. Only the server, via the service-role key, reads and decrypts it, at the
 moment a request actually needs it. On account deletion this table cascades (`on delete cascade`).
+
+`share_links` maps an opaque token to a `user_id` — nothing else. It has normal owner-scoped RLS
+(select/insert/delete) for the authenticated user who created it, but the public `/w/{token}` page never queries it
+through that RLS at all: `api/share.ts`'s GET handler reads it (and the sharer's `watchlist_items`/`movies_cache`
+rows, and their display name via `auth.admin.getUserById`) through the service-role client, since an anonymous
+visitor has no session for any RLS policy to key off. `anon` has no grants on this table whatsoever. On account
+deletion this table cascades (`on delete cascade`) — see Public share links below for the full design.
 
 ---
 
@@ -142,6 +150,7 @@ moment a request actually needs it. On account deletion this table cascades (`on
 | Feedback | — | Free-text form → `feedback` table + email notification |
 | Privacy / Terms | — | Static legal pages, footer-linked |
 | Account Deleted | — | Post-deletion confirmation, outside auth entirely |
+| Public Share (`/w/{token}`) | — | No login required — a visitor's view of someone else's live want-list, with a signup CTA |
 
 ---
 
@@ -207,6 +216,40 @@ On success the client calls `supabase.auth.signOut()` and redirects to `/account
 
 ---
 
+## Public share links
+
+`/w/{token}` — no login required, deliberately outside `ProtectedLayout` and `AuthGate`, same reasoning as
+`/reset-password` and `/account-deleted`: there's no session to guard, and for an anonymous visitor there never was
+one.
+
+**Live, not a snapshot.** The public page always reflects the sharer's *current* `status='want'` list, read fresh
+on every view — chosen over capturing a frozen list of `tmdb_id`s at share time because it needs nothing extra
+stored (`share_links` only maps token → `user_id`) and reuses the exact same watchlist query shape the rest of the
+app already has. The trade-off: the linked page can drift from a watchlist-card image generated earlier from the
+same account, since that image's own poster selection (top-rated, falling back to want) is a different, unchanged
+selection rule — a recipient who taps through may see a different set than the picture showed.
+
+**Token:** `crypto.randomBytes(18)`, base64url-encoded — opaque, unguessable, never sequential or derived from the
+row id or a timestamp. Generated server-side (`api/share.ts`'s POST, authenticated); one token per user, reused on
+every subsequent share rather than proliferating new links.
+
+**What the public GET ever returns:** a display name (from auth's own `user_metadata.display_name`, the same field
+set at signup — never a possibly-unsynced `profiles` column, and never the account's email) or `null` (the client
+renders "Someone"), plus the want-list's `tmdb_id`/`title`/`poster_path`/`release_year`. Nothing else — no `user_id`,
+no ratings, no watched list, no other `profiles` column. An unknown/invalid token returns a 404 with a friendly
+`{error, code: 'not_found'}` shape, rendered as a plain "this link isn't around any more" state, never a raw error
+page.
+
+**Signup-triggered import.** Visiting `/w/{token}` and clicking "Sign up to save this list" stores the token in
+`sessionStorage` (survives navigating around before completing signup; cleared on tab close). `AuthProvider`'s
+`onAuthStateChange` listener imports every film on `SIGNED_IN` by calling the existing `addToWatchlist()` per
+`tmdb_id` — which already treats an existing want/watched row as "leave it alone" and revives a previously-dropped
+one, so "don't duplicate or overwrite existing rows" needs no separate logic. Best-effort: one film failing to
+import doesn't roll back the rest. Safe to fire on every `SIGNED_IN` event (including an ordinary session restore
+for a returning user) since it's a no-op whenever there's no pending token.
+
+---
+
 ## Feedback & operational email
 
 `api/feedback.ts` inserts into `feedback` and sends a notification via `server/email.ts` (Resend,
@@ -222,12 +265,12 @@ limitation in `server/email.ts` rather than assumed away.
 
 **Must:** auth · search · watchlist · mark watched · rating slider · movie detail · Pick For Me · Discover/Decide split · themes · regional-language discovery · trending.
 
-**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap).
+**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively).
 
 **Could (cut in this order if hours slip):** watch providers → CSV export → reviews → Blind Spots.
 
 **Parked — do not build. Surface on the Coming Soon page instead:**
-TV shows & web series · public share links · social feed / following · Duo Match · PDF export.
+TV shows & web series · social feed / following · Duo Match · PDF export.
 
 If asked to add something outside this list, **flag it rather than building it.**
 

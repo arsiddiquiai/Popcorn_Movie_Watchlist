@@ -10,6 +10,7 @@ import Feedback from './routes/Feedback'
 import { Privacy, Terms } from './routes/Legal'
 import MovieDetail from './routes/MovieDetail'
 import PickForMe from './routes/PickForMe'
+import PublicShare from './routes/PublicShare'
 import ResetPassword from './routes/ResetPassword'
 import Search from './routes/Search'
 import Settings from './routes/Settings'
@@ -34,6 +35,12 @@ function App() {
                 reached, the account no longer exists — there is no session
                 left to guard. */}
             <Route path="/account-deleted" element={<AccountDeleted />} />
+            {/* Deliberately outside ProtectedLayout — this is the whole
+                point of a public share link: an anonymous visitor with no
+                session at all needs to be able to see it. A logged-in
+                visitor can view it too; nothing here depends on auth
+                state. */}
+            <Route path="/w/:token" element={<PublicShare />} />
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />

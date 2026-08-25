@@ -248,6 +248,26 @@ export interface Database {
         }
         Relationships: []
       }
+      share_links: {
+        Row: {
+          /** Opaque, server-generated (crypto.randomBytes, base64url) —
+           *  never sequential, never derived from user_id or a timestamp. */
+          token: string
+          user_id: string
+          created_at: string
+        }
+        Insert: {
+          token: string
+          user_id: string
+          created_at?: string
+        }
+        Update: {
+          token?: string
+          user_id?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>

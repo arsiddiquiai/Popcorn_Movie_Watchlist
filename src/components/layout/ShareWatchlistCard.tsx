@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useAuth } from '../../auth/AuthProvider'
 import { fetchWatchlistByStatus } from '../../lib/watchlist'
 import { renderShareCard, shareOrDownloadCard, type ShareCardPoster } from '../../lib/shareCard'
+import { getOrCreateShareToken, shareUrlFor } from '../../lib/shareLink'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import { useTheme } from '../../theme/ThemeProvider'
 
@@ -86,8 +87,24 @@ export function ShareWatchlistCard() {
       }))
 
       const title = cardTitle(user.user_metadata?.display_name)
-      const blob = await renderShareCard(posters, readThemeColors(), title, statLine)
-      const outcome = await shareOrDownloadCard(blob)
+      // The public link always reflects the CURRENT want-list (see
+      // api/share.ts) — the card's own posters above are top-rated/
+      // fallback-to-want, so a recipient who taps through may see a
+      // slightly different set than the image shows. Acceptable: the
+      // brief for this card explicitly kept its existing poster selection
+      // unchanged and just asked to add the link alongside it.
+      let shareUrl: string | undefined
+      try {
+        const token = await getOrCreateShareToken()
+        shareUrl = shareUrlFor(token)
+      } catch (err) {
+        console.error('Could not create a share link:', err)
+        // The image card is still useful on its own — a failed link
+        // shouldn't block generating it.
+      }
+
+      const blob = await renderShareCard(posters, readThemeColors(), title, statLine, shareUrl)
+      const outcome = await shareOrDownloadCard(blob, 'popcorn-watchlist.png', shareUrl)
 
       if (outcome === 'downloaded') setMessage('Saved — check your downloads.')
       if (outcome === 'failed') setMessage("Couldn't generate the card. Try again.")

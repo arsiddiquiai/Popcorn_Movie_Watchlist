@@ -74,6 +74,12 @@ export async function renderShareCard(
   theme: ShareCardTheme,
   title: string,
   statLine: string,
+  /** The public /w/{token} link (see lib/shareLink.ts) — drawn in place of
+   *  the old static "Try Popcorn" line, so the card itself carries a live
+   *  path back into the app rather than just naming it. Optional so this
+   *  function still works for the single-movie rating/pick cards, which
+   *  don't have a whole-watchlist link to show. */
+  shareUrl?: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
   canvas.width = WIDTH
@@ -195,7 +201,10 @@ export async function renderShareCard(
 
   ctx.fillStyle = theme.accentWarm
   ctx.font = '700 22px "Manrope"'
-  ctx.fillText('Try Popcorn', WIDTH / 2, dividerY + 80)
+  // The live public link when there is one (strip the protocol — nobody
+  // needs to read "https://" on a shared image); otherwise the old static
+  // invite, for single-movie cards that have no whole-watchlist link.
+  ctx.fillText(shareUrl ? shareUrl.replace(/^https?:\/\//, '') : 'Try Popcorn', WIDTH / 2, dividerY + 80)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
@@ -214,14 +223,22 @@ export type ShareCardOutcome = 'shared' | 'downloaded' | 'cancelled' | 'failed'
  * isn't available or doesn't accept files (desktop Safari/Firefox, most
  * desktop browsers generally).
  */
-export async function shareOrDownloadCard(blob: Blob, filename = 'popcorn-watchlist.png'): Promise<ShareCardOutcome> {
+export async function shareOrDownloadCard(
+  blob: Blob,
+  filename = 'popcorn-watchlist.png',
+  /** The public /w/{token} link, when there is one — passed alongside the
+   *  image so a share target that supports it (not all do, when files are
+   *  also present) gives the recipient a tappable link, not just a
+   *  picture of one. */
+  url?: string,
+): Promise<ShareCardOutcome> {
   const file = new File([blob], filename, { type: 'image/png' })
 
   if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
     const canShareFiles = typeof navigator.canShare !== 'function' || navigator.canShare({ files: [file] })
     if (canShareFiles) {
       try {
-        await navigator.share({ files: [file], title: 'My Popcorn Watchlist' })
+        await navigator.share({ files: [file], title: 'My Popcorn Watchlist', url })
         return 'shared'
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return 'cancelled'

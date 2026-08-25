@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { importPendingSharedList } from '../lib/shareLink'
 import type { AuthContextValue } from './types'
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -17,9 +18,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession)
       setLoading(false)
+      // Signup-triggered import of a pending shared watchlist (a public
+      // /w/{token} visit that led to signing up). SIGNED_IN also fires on
+      // an ordinary session restore for a returning user, not just a
+      // fresh signup/confirmation — that's fine, importPendingSharedList
+      // is a no-op whenever there's no pending token in sessionStorage,
+      // which is the normal case for a returning user who never visited a
+      // share link.
+      if (event === 'SIGNED_IN' && newSession?.user) {
+        void importPendingSharedList(newSession.user.id)
+      }
     })
 
     return () => subscription.unsubscribe()

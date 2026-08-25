@@ -1,7 +1,7 @@
 /**
- * Service-role Supabase client — bypasses RLS entirely. Used for exactly two
- * things in this codebase, both of which are structurally impossible under
- * the anon key by design:
+ * Service-role Supabase client — bypasses RLS entirely. Used for exactly
+ * three things in this codebase, all structurally impossible under the
+ * anon key by design:
  *
  *   1. Reading a stored BYOK key to decrypt and use it (server/byok.ts).
  *      user_api_keys grants authenticated a SELECT policy for METADATA only
@@ -15,6 +15,14 @@
  *   2. Deleting an auth.users row on account deletion (api/delete-account.ts)
  *      — only the admin API can do this; no RLS policy can grant a user
  *      their own account deletion.
+ *   3. Serving the public /w/{token} share page (api/share.ts's GET) — the
+ *      visitor is anonymous (no session at all, so no auth.uid() for any
+ *      RLS policy to match), but the response needs the sharer's current
+ *      display name and want-list, which are that OTHER user's rows. The
+ *      token->user_id lookup and the display name (via
+ *      auth.admin.getUserById, not a possibly-unsynced profiles row) both
+ *      stay server-side; only display name + poster list ever reach the
+ *      client, never the token's user_id itself.
  *
  * Never used for anything a JWT-scoped client can already do — every other
  * query in this codebase stays scoped to the caller's own JWT so RLS keeps
