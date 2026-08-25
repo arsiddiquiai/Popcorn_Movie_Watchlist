@@ -8,6 +8,7 @@
 export interface ShareCardTheme {
   bg: string
   surface: string
+  border: string
   text: string
   muted: string
   accentWarm: string
@@ -20,7 +21,17 @@ export interface ShareCardPoster {
 }
 
 const WIDTH = 1080
-const HEIGHT = 1350
+const HEIGHT = 1440
+// Six, not nine — three-by-two leaves the title and footer real room
+// instead of the grid competing with them for space (live-review redesign,
+// which added both).
+const GRID_COLS = 3
+const GRID_ROWS = 2
+// --radius-poster is 12px against a ~130px-wide UI card (about a 9%
+// ratio) — this canvas draws posters far larger, so the radius is scaled
+// up to read as the same proportional rounding rather than a literal 12px,
+// which would look almost square at this size.
+const POSTER_RADIUS = 22
 
 // The exact path from layout/Logo.tsx's KernelMark — one shape, drawn on
 // canvas via Path2D instead of re-approximated by hand, so the wordmark on
@@ -53,10 +64,15 @@ function roundedRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w:
 
 /** Renders the card and resolves with a PNG Blob. Throws if canvas or any
  *  poster image genuinely can't be produced — callers decide how to
- *  surface that. */
+ *  surface that.
+ *
+ *  `title` is the card's headline — "My Watchlist" or "{name}'s
+ *  Watchlist"; the caller decides which (never the account's email — see
+ *  ShareWatchlistCard's own reasoning on that). */
 export async function renderShareCard(
   posters: ShareCardPoster[],
   theme: ShareCardTheme,
+  title: string,
   statLine: string,
 ): Promise<Blob> {
   const canvas = document.createElement('canvas')
@@ -69,30 +85,39 @@ export async function renderShareCard(
   // set before canvas text will use them — otherwise it silently falls
   // back to a system font.
   await Promise.all([
+    document.fonts.load('700 52px "Space Grotesk"'),
     document.fonts.load('700 40px "Space Grotesk"'),
     document.fonts.load('600 28px "Manrope"'),
+    document.fonts.load('500 22px "Manrope"'),
   ]).catch(() => {
     // Font loading can fail (offline, slow network) — canvas text just
     // falls back to a system sans-serif in that case, not a hard failure.
   })
 
-  ctx.fillStyle = theme.bg
+  // Subtle themed background — a diagonal wash from --bg into --surface,
+  // not a flat fill, so the card reads as designed rather than a plain
+  // colour swatch. Still uses only the two darkest/base theme tokens, so
+  // it stays quiet behind the posters rather than competing with them.
+  const backgroundGradient = ctx.createLinearGradient(0, 0, WIDTH, HEIGHT)
+  backgroundGradient.addColorStop(0, theme.bg)
+  backgroundGradient.addColorStop(1, theme.surface)
+  ctx.fillStyle = backgroundGradient
   ctx.fillRect(0, 0, WIDTH, HEIGHT)
 
   // Wordmark: gradient kernel box + "Popcorn", the same recipe as
   // layout/Logo.tsx's <Logo />.
-  const markX = 64
+  const marginX = 64
   const markY = 64
   const markSize = 64
-  const gradient = ctx.createLinearGradient(markX, markY, markX + markSize, markY + markSize)
-  gradient.addColorStop(0, theme.hero)
-  gradient.addColorStop(1, theme.accentWarm)
-  ctx.fillStyle = gradient
-  roundedRectPath(ctx, markX, markY, markSize, markSize, 14)
+  const kernelGradient = ctx.createLinearGradient(marginX, markY, marginX + markSize, markY + markSize)
+  kernelGradient.addColorStop(0, theme.hero)
+  kernelGradient.addColorStop(1, theme.accentWarm)
+  ctx.fillStyle = kernelGradient
+  roundedRectPath(ctx, marginX, markY, markSize, markSize, 14)
   ctx.fill()
 
   ctx.save()
-  ctx.translate(markX + markSize / 2 - 16, markY + markSize / 2 - 16)
+  ctx.translate(marginX + markSize / 2 - 16, markY + markSize / 2 - 16)
   ctx.fillStyle = theme.bg
   ctx.fill(new Path2D(KERNEL_PATH))
   ctx.restore()
@@ -101,18 +126,27 @@ export async function renderShareCard(
   ctx.font = '700 40px "Space Grotesk"'
   ctx.textBaseline = 'middle'
   ctx.textAlign = 'left'
-  ctx.fillText('Popcorn', markX + markSize + 20, markY + markSize / 2 + 2)
+  ctx.fillText('Popcorn', marginX + markSize + 20, markY + markSize / 2 + 2)
 
-  // Poster grid.
-  const cols = 3
-  const gap = 20
-  const marginX = 64
-  const gridTop = 200
-  const cellW = (WIDTH - marginX * 2 - gap * (cols - 1)) / cols
+  // Title — the card's actual headline, sized and weighted well past the
+  // wordmark so it reads as the point of the image, not a caption on it.
+  const titleY = markY + markSize + 76
+  ctx.fillStyle = theme.text
+  ctx.font = '700 52px "Space Grotesk"'
+  ctx.textBaseline = 'alphabetic'
+  ctx.textAlign = 'left'
+  ctx.fillText(title, marginX, titleY)
+
+  // Poster grid — tightened gutters and a consistent margin matching the
+  // wordmark/title's own left edge, corners rounded so thumbnails read as
+  // designed tiles rather than a raw screenshot strip.
+  const gap = 16
+  const gridTop = titleY + 48
+  const cellW = (WIDTH - marginX * 2 - gap * (GRID_COLS - 1)) / GRID_COLS
   const cellH = cellW * 1.5
 
   const images = await Promise.all(
-    posters.map(async (poster) => {
+    posters.slice(0, GRID_COLS * GRID_ROWS).map(async (poster) => {
       try {
         return await loadImage(poster.url)
       } catch {
@@ -124,23 +158,44 @@ export async function renderShareCard(
   let lastRowBottom = gridTop
   images.forEach((img, index) => {
     if (!img) return
-    const col = index % cols
-    const row = Math.floor(index / cols)
+    const col = index % GRID_COLS
+    const row = Math.floor(index / GRID_COLS)
     const x = marginX + col * (cellW + gap)
     const y = gridTop + row * (cellH + gap)
     ctx.save()
-    roundedRectPath(ctx, x, y, cellW, cellH, 16)
+    roundedRectPath(ctx, x, y, cellW, cellH, POSTER_RADIUS)
     ctx.clip()
     ctx.drawImage(img, x, y, cellW, cellH)
     ctx.restore()
     lastRowBottom = Math.max(lastRowBottom, y + cellH)
   })
 
+  // Stat line.
   ctx.fillStyle = theme.muted
   ctx.font = '600 28px "Manrope"'
   ctx.textAlign = 'center'
   ctx.textBaseline = 'alphabetic'
-  ctx.fillText(statLine, WIDTH / 2, lastRowBottom + 56)
+  const statY = lastRowBottom + 56
+  ctx.fillText(statLine, WIDTH / 2, statY)
+
+  // A thin centred divider, then the footer — tagline plus an invite to
+  // try Popcorn, so a card shared outside the app still says what it is.
+  const dividerY = statY + 34
+  const dividerWidth = 160
+  ctx.strokeStyle = theme.border
+  ctx.lineWidth = 1
+  ctx.beginPath()
+  ctx.moveTo(WIDTH / 2 - dividerWidth / 2, dividerY)
+  ctx.lineTo(WIDTH / 2 + dividerWidth / 2, dividerY)
+  ctx.stroke()
+
+  ctx.fillStyle = theme.muted
+  ctx.font = '500 24px "Manrope"'
+  ctx.fillText('Decide what to watch, faster.', WIDTH / 2, dividerY + 44)
+
+  ctx.fillStyle = theme.accentWarm
+  ctx.font = '700 22px "Manrope"'
+  ctx.fillText('Try Popcorn', WIDTH / 2, dividerY + 80)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {

@@ -5,7 +5,10 @@ import { renderShareCard, shareOrDownloadCard, type ShareCardPoster } from '../.
 import { tmdbImageUrl } from '../../lib/tmdbClient'
 import { useTheme } from '../../theme/ThemeProvider'
 
-const POSTER_COUNT = 9
+// Matches shareCard.ts's own 3x2 grid — kept as a named constant here too
+// so this file's slice and that file's layout math can't silently drift
+// apart if either changes.
+const POSTER_COUNT = 6
 
 type State = 'idle' | 'working' | 'error'
 
@@ -15,11 +18,27 @@ function readThemeColors() {
   return {
     bg: get('--bg', '#161211'),
     surface: get('--surface', '#211b19'),
+    border: get('--border', '#3a2e29'),
     text: get('--text', '#f2e9de'),
     muted: get('--muted', '#a89a8c'),
     accentWarm: get('--accent-warm', '#d4a24c'),
     hero: get('--hero', '#c8442d'),
   }
+}
+
+/**
+ * Card title — DESIGN.md live-review: never the account's email. Uses the
+ * display name from signup (Supabase auth's own user_metadata — no query,
+ * no migration) when the user set one there, since typing an optional name
+ * into a field the app has never shown anywhere else is the closest thing
+ * to opt-in consent available without building a real public/shareable
+ * toggle (out of scope for a share-card visual pass, and there's no way
+ * for this session to run the migration one would need anyway). No name
+ * set -> stays anonymous.
+ */
+function cardTitle(displayName: unknown): string {
+  const name = typeof displayName === 'string' ? displayName.trim() : ''
+  return name ? `${name}'s Watchlist` : 'My Watchlist'
 }
 
 /**
@@ -66,7 +85,8 @@ export function ShareWatchlistCard() {
         title: entry.movie.title,
       }))
 
-      const blob = await renderShareCard(posters, readThemeColors(), statLine)
+      const title = cardTitle(user.user_metadata?.display_name)
+      const blob = await renderShareCard(posters, readThemeColors(), title, statLine)
       const outcome = await shareOrDownloadCard(blob)
 
       if (outcome === 'downloaded') setMessage('Saved — check your downloads.')
