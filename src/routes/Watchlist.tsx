@@ -30,7 +30,11 @@ type Tab = 'want' | 'watched' | 'buried'
 const TAB_STATUS: Record<Tab, WatchlistStatus> = { want: 'want', watched: 'watched', buried: 'dropped' }
 
 const tabs: { id: Tab; label: string }[] = [
-  { id: 'want', label: 'Want to Watch' },
+  // Shortened from "Want to Watch" — three tabs' worth of label plus the
+  // Refresh button was tight on a 390px-wide app bar row; defensive, not a
+  // confirmed cause of the reported "no Buried tab visible" (see the
+  // commit message — that tab is already unconditionally in this array).
+  { id: 'want', label: 'Want' },
   { id: 'watched', label: 'Watched' },
   { id: 'buried', label: 'Buried' },
 ]
@@ -344,7 +348,13 @@ export default function Watchlist() {
         {toastAction && (
           <UndoToast
             key={toastAction.entry.item.id}
-            message={toastAction.kind === 'watched' ? 'Marked as watched' : 'Buried'}
+            message={
+              toastAction.kind === 'watched'
+                ? 'Marked as watched'
+                : toastAction.kind === 'moved_to_want'
+                  ? 'Moved to Want to Watch'
+                  : 'Buried'
+            }
             onUndo={() => void handleUndo()}
             onDismiss={() => {
               clearToastTimer()

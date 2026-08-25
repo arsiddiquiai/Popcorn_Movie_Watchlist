@@ -15,6 +15,7 @@ interface PosterActionSheetProps {
   status: WatchlistStatus | 'not_on_list'
   onAdd?: () => Promise<void>
   onMarkWatched?: () => Promise<void>
+  onMoveToWant?: () => Promise<void>
   onBury?: () => Promise<void>
 }
 
@@ -68,8 +69,23 @@ function Row({
  *   Bury  — identical to swiping left; not offered on Search results
  *           (nothing to bury yet) or the Buried tab (already buried, use
  *           its own visible Restore button instead).
+ *
+ * A watched card also gets Move to Want to Watch (unmarkWatched) — the
+ * live-review fix for "Watched's sheet doesn't offer an equivalent action
+ * to Want's Mark as Watched": there was no UI path to that reversal at
+ * all before, gesture or otherwise, not even a wrong/inconsistent one.
  */
-export function PosterActionSheet({ open, onClose, title, tmdbId, status, onAdd, onMarkWatched, onBury }: PosterActionSheetProps) {
+export function PosterActionSheet({
+  open,
+  onClose,
+  title,
+  tmdbId,
+  status,
+  onAdd,
+  onMarkWatched,
+  onMoveToWant,
+  onBury,
+}: PosterActionSheetProps) {
   const [addState, setAddState] = useState<'idle' | 'adding' | 'added'>('idle')
   const [shareState, setShareState] = useState<'idle' | 'sharing' | 'done'>('idle')
   const [busy, setBusy] = useState(false)
@@ -111,6 +127,16 @@ export function PosterActionSheet({ open, onClose, title, tmdbId, status, onAdd,
             onClick={() => {
               setBusy(true)
               void onMarkWatched().finally(() => setBusy(false))
+            }}
+          />
+        )}
+        {status === 'watched' && onMoveToWant && (
+          <Row
+            label="Move to Want to Watch"
+            disabled={busy}
+            onClick={() => {
+              setBusy(true)
+              void onMoveToWant().finally(() => setBusy(false))
             }}
           />
         )}

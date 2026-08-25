@@ -67,7 +67,7 @@ function BuryIcon() {
  *  paths rather than two. */
 export interface SwipeAction {
   entry: WatchlistEntry
-  kind: 'watched' | 'buried'
+  kind: 'watched' | 'buried' | 'moved_to_want'
   revert: () => Promise<void>
 }
 
@@ -157,6 +157,17 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
         kind: 'buried',
         revert: async () => void (await addToWatchlist(movie.tmdb_id, user.id)),
       })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  async function commitMoveToWant() {
+    if (pending) return
+    setPending(true)
+    try {
+      await unmarkWatched(item.id)
+      onSwipeAction?.({ entry, kind: 'moved_to_want', revert: () => markAsWatched(item.id) })
     } finally {
       setPending(false)
     }
@@ -356,6 +367,10 @@ export function WatchlistCard({ entry, decayLevel = 0, decayEnabled = false, onD
       status={item.status}
       onMarkWatched={async () => {
         await commitMarkWatched()
+        setSheetOpen(false)
+      }}
+      onMoveToWant={async () => {
+        await commitMoveToWant()
         setSheetOpen(false)
       }}
       onBury={async () => {
