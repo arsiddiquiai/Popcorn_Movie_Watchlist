@@ -357,6 +357,8 @@ export default function MovieDetail() {
           <RatingPanel
             tmdbId={tmdbId}
             userId={user.id}
+            movieTitle={movie.title}
+            posterPath={movie.poster_path}
             existingRating={rating}
             onScoreChange={setLiveScore}
             onRelease={(score) =>

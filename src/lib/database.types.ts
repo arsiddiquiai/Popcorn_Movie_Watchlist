@@ -268,6 +268,30 @@ export interface Database {
         }
         Relationships: []
       }
+      share_card_cache: {
+        Row: {
+          user_id: string
+          verdict_text: string | null
+          verdict_item_count: number
+          verdict_generated_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          user_id: string
+          verdict_text?: string | null
+          verdict_item_count?: number
+          verdict_generated_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          user_id?: string
+          verdict_text?: string | null
+          verdict_item_count?: number
+          verdict_generated_at?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -289,3 +313,4 @@ export type Rating = Tables<'ratings'>
 export type AiSession = Tables<'ai_sessions'>
 export type Feedback = Tables<'feedback'>
 export type UserApiKey = Tables<'user_api_keys'>
+export type ShareCardCache = Tables<'share_card_cache'>

@@ -1723,6 +1723,209 @@ async function handleTaste(
 }
 
 // ---------------------------------------------------------------------------
+// mode: "verdict" — the share card's one-line list description
+// ---------------------------------------------------------------------------
+
+interface VerdictResponse {
+  verdict_text: string
+  /** True when this response came straight from share_card_cache without
+   *  calling Claude — lets the client be honest in a "generating…" state if
+   *  it wants to, and is useful for eyeballing cost in the network tab. */
+  cached: boolean
+}
+
+/** Below this many want+watched items there isn't enough of a pattern to
+ *  read — same cold-start honesty rule as Taste DNA's TASTE_MIN_RATINGS,
+ *  just against list size rather than rating count, since a verdict reads
+ *  the list itself (genres, mood tags), not scores. No Claude call below
+ *  this threshold — cost as well as honesty. */
+const VERDICT_MIN_ITEMS = 3
+
+/** Regeneration gates — BOTH must be satisfied, not either. A cooldown
+ *  alone would still regenerate a barely-changed list once a day for free;
+ *  a change-count alone would let someone who adds one film a minute burn a
+ *  Claude call every minute. Together: at most one call per user per 24h,
+ *  and only then if the list actually moved.
+ *
+ *  24h and 5 items are starting points, not measured constants (unlike the
+ *  latency numbers elsewhere in this file) — cheap to retune once real
+ *  usage is observed. */
+const VERDICT_COOLDOWN_HOURS = 24
+const VERDICT_CHANGE_THRESHOLD = 5
+
+const writeVerdictTool = {
+  name: 'write_verdict',
+  description: "Write one short, dry sentence describing the user's watchlist pattern.",
+  strict: true,
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      verdict: {
+        type: 'string',
+        description:
+          'ONE sentence, 12 words maximum. Dry, a little self-aware, never a compliment or a sales pitch — ' +
+          'in the voice of someone who has actually looked at this specific list. ' +
+          '"Mostly thrillers, one romance you\'re not proud of" is the bar. "You love great movies!" is a ' +
+          'failure. Reference the actual dominant genre(s) or a genuine outlier, never invent one.',
+      },
+    },
+    required: ['verdict'],
+    additionalProperties: false,
+  },
+}
+
+const VERDICT_SYSTEM_PROMPT = [
+  "You are writing the one-line caption on a Popcorn user's shareable watchlist card — the line under",
+  'their poster grid, meant to be read by their friends.',
+  '',
+  'Rules:',
+  '- Dry and specific, never a compliment, never marketing copy. This is a caption a friend would',
+  '  actually laugh at, not an ad.',
+  '- Base it only on the genre/mood data given. Never invent a pattern that is not there.',
+  '- 12 words maximum. One sentence.',
+].join('\n')
+
+/** Genre counts across both want and watched items, plus rating reason_tags
+ *  from watched ones — the "mood" half of "genre/mood distribution" the
+ *  brief asks for. Deliberately separate from loadTasteContext: that one
+ *  only looks at RATED movies (it is measuring taste from scores), while a
+ *  verdict is describing the list as it stands today, want items included. */
+async function loadVerdictContext(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ itemCount: number; genreCounts: Map<string, number>; moodTags: Map<string, number> }> {
+  const [wantResult, watchedResult, ratingsResult] = await Promise.all([
+    supabase.from('watchlist_items').select('tmdb_id').eq('user_id', userId).eq('status', 'want'),
+    supabase.from('watchlist_items').select('tmdb_id').eq('user_id', userId).eq('status', 'watched'),
+    supabase.from('ratings').select('tmdb_id, reason_tags').eq('user_id', userId),
+  ])
+  if (wantResult.error) throw wantResult.error
+  if (watchedResult.error) throw watchedResult.error
+  if (ratingsResult.error) throw ratingsResult.error
+
+  const allIds = [...new Set([...wantResult.data, ...watchedResult.data].map((r) => r.tmdb_id))]
+  const itemCount = allIds.length
+
+  const genreCounts = new Map<string, number>()
+  if (allIds.length > 0) {
+    const { data: movies, error: moviesError } = await supabase
+      .from('movies_cache')
+      .select('tmdb_id, genres')
+      .in('tmdb_id', allIds)
+    if (moviesError) throw moviesError
+    for (const movie of movies) {
+      for (const genre of movie.genres ?? []) genreCounts.set(genre, (genreCounts.get(genre) ?? 0) + 1)
+    }
+  }
+
+  const moodTags = new Map<string, number>()
+  for (const rating of ratingsResult.data) {
+    for (const tag of rating.reason_tags ?? []) moodTags.set(tag, (moodTags.get(tag) ?? 0) + 1)
+  }
+
+  return { itemCount, genreCounts, moodTags }
+}
+
+async function handleVerdict(
+  supabase: SupabaseClient<Database>,
+  userId: string,
+): Promise<{ status: number; body: unknown }> {
+  const { itemCount, genreCounts, moodTags } = await loadVerdictContext(supabase, userId)
+
+  if (itemCount < VERDICT_MIN_ITEMS) {
+    return {
+      status: 200,
+      body: { verdict_text: "Just getting started — add a few more to see a pattern.", cached: false } as VerdictResponse,
+    }
+  }
+
+  // Cache check. Wrapped in its own try/catch, not the outer handler's:
+  // share_card_cache is a brand-new table behind a migration that (per this
+  // project's "no DB credentials" constraint) has to be run by the project
+  // owner separately from this code deploying — so a missing-table error
+  // here is an expected, temporary state, not a bug. On any failure this
+  // just regenerates live and skips writing the cache back, rather than
+  // failing the request. See that migration's own header comment.
+  let cached: Pick<
+    Database['public']['Tables']['share_card_cache']['Row'],
+    'verdict_text' | 'verdict_item_count' | 'verdict_generated_at'
+  > | null = null
+  try {
+    const { data, error } = await supabase
+      .from('share_card_cache')
+      .select('verdict_text, verdict_item_count, verdict_generated_at')
+      .eq('user_id', userId)
+      .maybeSingle()
+    if (error) throw error
+    cached = data
+  } catch (err) {
+    console.error(
+      'share_card_cache read skipped (migration likely not run yet):',
+      err instanceof Error ? err.message : err,
+    )
+  }
+
+  if (cached?.verdict_text && cached.verdict_generated_at) {
+    const ageHours = (Date.now() - new Date(cached.verdict_generated_at).getTime()) / (1000 * 60 * 60)
+    const changed = Math.abs(itemCount - cached.verdict_item_count)
+    if (ageHours < VERDICT_COOLDOWN_HOURS && changed < VERDICT_CHANGE_THRESHOLD) {
+      return { status: 200, body: { verdict_text: cached.verdict_text, cached: true } as VerdictResponse }
+    }
+  }
+
+  const topGenres = [...genreCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+  const topMoods = [...moodTags.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4)
+
+  const userContent = [
+    `Total films on the list (want + watched): ${itemCount}`,
+    `Genre counts: ${topGenres.length ? topGenres.map(([g, c]) => `${g} (${c})`).join(', ') : 'none recorded'}`,
+    topMoods.length
+      ? `What they said they liked about films they've rated: ${topMoods.map(([t, c]) => `${t} (${c})`).join(', ')}`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('\n')
+
+  let verdictText: string
+  try {
+    const { input } = await callModelForTool<{ verdict: string }>(
+      userId,
+      VERDICT_SYSTEM_PROMPT,
+      userContent,
+      writeVerdictTool,
+    )
+    verdictText = input.verdict
+  } catch (err) {
+    console.error('Verdict generation failed:', err instanceof Error ? err.message : err)
+    // A decorative caption failing must not break the share card itself —
+    // fall back to a plain, honest line rather than surfacing an error.
+    const topGenre = topGenres[0]?.[0]
+    verdictText = topGenre ? `Mostly ${topGenre.toLowerCase()}, apparently.` : 'A list, defiantly unsorted.'
+  }
+
+  try {
+    const { error } = await supabase.from('share_card_cache').upsert(
+      {
+        user_id: userId,
+        verdict_text: verdictText,
+        verdict_item_count: itemCount,
+        verdict_generated_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    )
+    if (error) throw error
+  } catch (err) {
+    console.error(
+      'share_card_cache write skipped (migration likely not run yet):',
+      err instanceof Error ? err.message : err,
+    )
+  }
+
+  return { status: 200, body: { verdict_text: verdictText, cached: false } as VerdictResponse }
+}
+
+// ---------------------------------------------------------------------------
 // mode: "assistant" — AI Movie Assistant
 // ---------------------------------------------------------------------------
 
@@ -2398,8 +2601,8 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const mode = (body as { mode?: unknown })?.mode
-  if (mode !== 'pick' && mode !== 'bridge' && mode !== 'taste' && mode !== 'assistant') {
-    return errorResponse('mode must be one of: "pick", "bridge", "taste", "assistant".', 400, 'invalid_mode')
+  if (mode !== 'pick' && mode !== 'bridge' && mode !== 'taste' && mode !== 'assistant' && mode !== 'verdict') {
+    return errorResponse('mode must be one of: "pick", "bridge", "taste", "assistant", "verdict".', 400, 'invalid_mode')
   }
 
   // Identity comes from the verified JWT only — never from the request body.
@@ -2435,6 +2638,13 @@ export async function POST(req: Request): Promise<Response> {
     // the caller's own rating history, nothing the client supplies.
     if (mode === 'taste') {
       const { status, body: responseBody } = await handleTaste(supabase, userId)
+      return json(responseBody, status)
+    }
+
+    // Same as taste: reasons over the caller's own list, nothing the
+    // client supplies.
+    if (mode === 'verdict') {
+      const { status, body: responseBody } = await handleVerdict(supabase, userId)
       return json(responseBody, status)
     }
 

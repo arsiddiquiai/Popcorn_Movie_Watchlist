@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { motion, useAnimationControls } from 'framer-motion'
+import { ShareSingleMovieButton } from '../layout/ShareSingleMovieButton'
 import type { Rating } from '../../lib/database.types'
 import { saveReasonTags, saveScore } from '../../lib/ratings'
 import {
@@ -22,6 +23,11 @@ const DEFAULT_SCORE = 5
 interface RatingPanelProps {
   tmdbId: number
   userId: string
+  /** Only needed for the "Share this rating" prompt on a 9-10 — everything
+   *  else in this panel already worked without knowing the film's title or
+   *  poster. */
+  movieTitle: string
+  posterPath: string | null
   existingRating: Rating | null
   /** Reports the live value so the page's poster can react to it. */
   onScoreChange: (score: number) => void
@@ -37,6 +43,8 @@ interface RatingPanelProps {
 export function RatingPanel({
   tmdbId,
   userId,
+  movieTitle,
+  posterPath,
   existingRating,
   onScoreChange,
   onRelease,
@@ -202,6 +210,21 @@ export function RatingPanel({
         <>
           <WhyChips selected={tags} onToggle={(tag) => void toggleTag(tag)} disabled={saving} />
           <ReviewNote ratingId={rating.id} initialText={rating.review_text} />
+          {/* Only offered on a 9-10 — isFavoriteScore is the same threshold
+              the star badge above already uses, so "share-worthy" and
+              "favorite" stay one definition rather than two. Dismissible in
+              the sense that it's just inline, unforced UI — there's no
+              modal or nag to close. */}
+          {isFavoriteScore(rating.score) && (
+            <ShareSingleMovieButton
+              posterPath={posterPath}
+              title={movieTitle}
+              eyebrow="Your rating"
+              tagline={`${verdictFor(rating.score)} — ${rating.score}/10`}
+              filename="popcorn-rating"
+              label="Share this rating"
+            />
+          )}
         </>
       )}
     </motion.div>

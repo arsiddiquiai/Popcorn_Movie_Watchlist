@@ -23,6 +23,16 @@
  * budget, so on this file's hard Netlify 10s ceiling such a turn is at real
  * risk of failing. This mode is ported here for fallback parity, not
  * because it's been verified to fit Netlify's limit.
+ *
+ * NOTE — drift, not yet ported: this file predates BYOK entirely (no
+ * server/byok.ts import, no callModelForTool wrapper — pick/bridge/taste
+ * here always use the shared key) and does not implement `mode: "verdict"`
+ * (the share card's cached AI verdict line), added only to api/ai.ts. Both
+ * gaps are consistent with this file's stated role as a not-fully-verified
+ * fallback, not a parity bug — flagged here rather than ported, since
+ * porting a second BYOK+verdict implementation into an already-secondary
+ * file doubles the surface area to keep in sync for a path CLAUDE.md
+ * already treats as provisional.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'

@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
+import { ShareSingleMovieButton } from '../layout/ShareSingleMovieButton'
 import type { MovieCache } from '../../lib/database.types'
 import { formatRuntime } from '../../lib/format'
 import { tmdbImageUrl } from '../../lib/tmdbClient'
@@ -160,6 +161,15 @@ export function ResultCard({
               Not this one
             </button>
           )}
+
+          <ShareSingleMovieButton
+            posterPath={movie.poster_path}
+            title={movie.title}
+            eyebrow="Tonight's pick"
+            tagline={reason}
+            filename="popcorn-pick"
+            label="Share this pick"
+          />
         </div>
 
         {actionState === 'error' && <p className="font-ui text-sm text-accent-cold">That didn't save. Try again.</p>}
