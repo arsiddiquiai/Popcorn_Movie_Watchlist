@@ -88,24 +88,76 @@ const KERNEL_PATH =
  *  button spinning forever with nothing to show and nothing logged. */
 const IMAGE_LOAD_TIMEOUT_MS = 8_000
 
+/**
+ * TEMPORARY DIAGNOSTIC — safe to delete once real-device poster-load
+ * failures are understood and fixed. Server logs show nothing about this
+ * (the card renders entirely client-side, in the browser, never touching
+ * a Vercel function), and a phone's devtools console usually isn't
+ * reachable without USB debugging — so the actual failure reason is drawn
+ * directly onto the failed poster's placeholder panel, visible right in
+ * the resulting screenshot/share. Flip this to `false` (or delete the two
+ * `drawPosterPlaceholder` call sites' debug-message argument, and this
+ * flag, and the on-canvas branch inside drawPosterPlaceholder itself) once
+ * done — nothing else depends on it.
+ */
+export const DEBUG_POSTER_FAILURES_ON_CARD = true
+
+/**
+ * Loads an image via fetch() + an object URL rather than setting `<img
+ * crossorigin src>` directly. Two real reasons, not just style:
+ *
+ * 1. Diagnosis. An <img>'s onerror event carries NO detail at all — a 404,
+ *    a CORS block, and a genuine network failure all fire the identical
+ *    bare "error" event, which is exactly why the previous version's
+ *    console.error could only ever say "Failed to load <url>" and nothing
+ *    about WHY. fetch()'s Response exposes the real HTTP status on a
+ *    non-2xx, and a network/CORS failure throws a distinguishable
+ *    TypeError — actual signal instead of a shrug.
+ * 2. Safety. A blob: URL is always same-origin, so there is no tainted-
+ *    canvas risk at all (previously relied on TMDB's CDN choosing to keep
+ *    sending permissive CORS headers) — canvas.toBlob() can never fail for
+ *    that reason with this approach, regardless of what any CDN does.
+ */
 function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image()
-    // TMDB's image CDN sends CORS headers permissively, so this doesn't
-    // taint the canvas — required for canvas.toBlob() to work at all with
-    // a cross-origin source image.
-    img.crossOrigin = 'anonymous'
-    const timer = setTimeout(() => reject(new Error(`Timed out loading ${src}`)), IMAGE_LOAD_TIMEOUT_MS)
-    img.onload = () => {
+  return (async () => {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), IMAGE_LOAD_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await fetch(src, { signal: controller.signal, mode: 'cors' })
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        throw new Error(`Timed out after ${IMAGE_LOAD_TIMEOUT_MS / 1000}s`)
+      }
+      // The Fetch spec deliberately doesn't distinguish "blocked by CORS"
+      // from "genuine network failure" in the TypeError it throws (that
+      // distinction would itself leak cross-origin information) — this is
+      // as precise as the platform allows, but it's still real signal:
+      // narrows the cause to "never got a response at all", ruling out a
+      // bad/missing poster (which would show as an HTTP status instead).
+      throw new Error(`Network/CORS error: ${err instanceof Error ? err.message : String(err)}`)
+    } finally {
       clearTimeout(timer)
-      resolve(img)
     }
-    img.onerror = () => {
-      clearTimeout(timer)
-      reject(new Error(`Failed to load ${src}`))
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+    const blob = await response.blob()
+    const objectUrl = URL.createObjectURL(blob)
+    try {
+      return await new Promise<HTMLImageElement>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => resolve(img)
+        img.onerror = () => reject(new Error('Downloaded but failed to decode as an image'))
+        img.src = objectUrl
+      })
+    } finally {
+      // The Image has its own decoded bitmap once loaded, so the object
+      // URL is safe to revoke right after — no delayed revoke needed here
+      // (unlike shareOrDownloadCard's download link, which a browser may
+      // still be reading from asynchronously after click()).
+      URL.revokeObjectURL(objectUrl)
     }
-    img.src = src
-  })
+  })()
 }
 
 /**
@@ -125,6 +177,11 @@ function drawPosterPlaceholder(
   y: number,
   w: number,
   h: number,
+  /** TEMPORARY — see DEBUG_POSTER_FAILURES_ON_CARD's doc comment. The
+   *  actual loadImage() failure reason (e.g. "HTTP 404", "Timed out after
+   *  8s", "Network/CORS error: Failed to fetch"), drawn inside the
+   *  placeholder when the flag is on. Undefined/ignored once removed. */
+  debugMessage?: string,
 ) {
   roundedRectPath(ctx, x, y, w, h, POSTER_RADIUS)
   ctx.fillStyle = theme.surface
@@ -133,6 +190,21 @@ function drawPosterPlaceholder(
   ctx.lineWidth = 2
   roundedRectPath(ctx, x + 1, y + 1, w - 2, h - 2, POSTER_RADIUS)
   ctx.stroke()
+
+  if (DEBUG_POSTER_FAILURES_ON_CARD && debugMessage) {
+    ctx.save()
+    roundedRectPath(ctx, x, y, w, h, POSTER_RADIUS)
+    ctx.clip()
+    ctx.fillStyle = theme.accentWarm
+    ctx.textAlign = 'left'
+    ctx.textBaseline = 'top'
+    const pad = 10
+    const debugFontSize = 13
+    ctx.font = `600 ${debugFontSize}px "Manrope"`
+    const lines = wrapText(ctx, debugMessage, w - pad * 2, 10)
+    lines.forEach((line, i) => ctx.fillText(line, x + pad, y + pad + i * (debugFontSize + 4)))
+    ctx.restore()
+  }
 }
 
 /**
@@ -374,16 +446,17 @@ export async function renderShareCard(
   const images = await Promise.all(
     posters.slice(0, GRID_COLS * GRID_ROWS).map(async (poster) => {
       try {
-        return await loadImage(poster.url)
+        return { img: await loadImage(poster.url), error: null as string | null }
       } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
         console.error(`Watchlist card: poster failed to load for "${poster.title}" (${poster.url}):`, err)
-        return null
+        return { img: null, error: `${poster.title}: ${message}` }
       }
     }),
   )
 
   let lastRowBottom = gridTop
-  images.forEach((img, index) => {
+  images.forEach(({ img, error }, index) => {
     const col = index % GRID_COLS
     const row = Math.floor(index / GRID_COLS)
     const x = marginX + col * (cellW + gap)
@@ -395,7 +468,7 @@ export async function renderShareCard(
       ctx.drawImage(img, x, y, cellW, cellH)
       ctx.restore()
     } else {
-      drawPosterPlaceholder(ctx, theme, x, y, cellW, cellH)
+      drawPosterPlaceholder(ctx, theme, x, y, cellW, cellH, error ?? undefined)
     }
     lastRowBottom = Math.max(lastRowBottom, y + cellH)
   })
@@ -518,12 +591,13 @@ export async function renderSingleMovieCard(
     ctx.drawImage(img, posterX, posterTop, posterW, posterH)
     ctx.restore()
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
     console.error(`Single-movie card: poster failed to load for "${poster.title}" (${poster.url}):`, err)
     // No poster image reachable — draw a visible placeholder (see
     // drawPosterPlaceholder's own doc comment on why an unbordered fill
     // alone read as "nothing rendered" in an actual screenshot) so the
     // card still renders something coherent rather than failing.
-    drawPosterPlaceholder(ctx, theme, posterX, posterTop, posterW, posterH)
+    drawPosterPlaceholder(ctx, theme, posterX, posterTop, posterW, posterH, `${poster.title}: ${message}`)
   }
 
   // Title — word-wrapped up to TITLE_MAX_LINES, same helper the grid
