@@ -1,4 +1,4 @@
-import { KernelMark } from './Logo'
+import { AssistantMark } from '../assistant/AssistantMark'
 
 /** Line icons shared between the bottom TabBar and any page-level action
  *  that wants the same mark (e.g. Watchlist's Surprise Me dice, both in the
@@ -38,11 +38,11 @@ export function DiceIcon() {
   )
 }
 
-/** The Assistant tab reuses the brand's own KernelMark rather than a
- *  generic chat-bubble icon — DESIGN.md §7 calls it out as the app's
- *  smartest feature and gives it its own identity everywhere it appears. */
+/** The Assistant tab's icon — DESIGN.md §7's signature mark (see
+ *  AssistantMark), rendered idle since the tab bar has no live
+ *  conversation state to reflect. */
 export function AssistantIcon() {
-  return <KernelMark size={22} fill="currentColor" />
+  return <AssistantMark state="idle" size={22} />
 }
 
 /** "Simple avatar/spark" per DESIGN.md §4 — a plain head-and-shoulders
@@ -53,6 +53,19 @@ export function YouIcon() {
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden="true">
       <circle cx="12" cy="8" r="3.5" />
       <path d="M4.5 20c1.4-3.8 4.4-6 7.5-6s6.1 2.2 7.5 6" />
+    </svg>
+  )
+}
+
+/** Persistent Feedback entry point in the mobile app bar (live-review fix
+ *  — Feedback was reachable only by drilling into the You tab). 20px, a
+ *  touch smaller than the 22px tab icons since it sits inline in the app
+ *  bar next to the wordmark, not in its own 64px-tall tap cell. */
+export function FeedbackIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="10" rx="3" />
+      <path d="M7 15 6 19l4-4" />
     </svg>
   )
 }

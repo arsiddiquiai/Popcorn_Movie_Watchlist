@@ -93,11 +93,10 @@ export default function CinemaBridge() {
 
   return (
     <div className="flex min-h-screen flex-col items-center gap-10 px-6 py-10 sm:px-10 sm:py-14">
+      {/* DiscoverTabs' own subtitle now carries this line (live-review
+          fix) — keeping a static duplicate here just repeated it. */}
       <div className="w-full max-w-xl">
         <h1 className="font-display text-3xl leading-[1.1] font-bold tracking-tight text-text sm:text-4xl">Cinema Bridge</h1>
-        <p className="mt-2 font-ui text-sm text-muted">
-          Loved a film? Find its equivalent in another industry or language.
-        </p>
       </div>
 
       <DiscoverTabs />

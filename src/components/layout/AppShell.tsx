@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
+import { FeedbackIcon } from './icons'
 import { Logo } from './Logo'
 import { mainBackgroundForMode, ModeHeader } from './ModeHeader'
 import { getActiveMode, Nav } from './Nav'
@@ -25,16 +26,38 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [barAction, setBarAction] = useState<ReactNode>(null)
   const mode = getActiveMode(pathname)
 
+  // React Router doesn't scroll-restore on navigation by default — without
+  // this, landing on a new route keeps whatever scrollY the previous page
+  // left behind. That's what made Settings appear to open scrolled to its
+  // Danger Zone: nothing route-specific, just the browser's normal scroll
+  // position carrying over onto a page tall enough for it to be a visible
+  // difference (live-review fix).
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [pathname])
+
   return (
     <AppBarActionContext.Provider value={setBarAction}>
       <div className="flex min-h-screen flex-col bg-bg text-text lg:flex-row">
         {/* DESIGN.md §4: the hamburger + slide-out drawer are gone. Below
             1024px, navigation lives entirely in the bottom TabBar; this top
             bar is chrome only (brand + the current page's own action) —
-            it's no longer a menu trigger. */}
+            it's no longer a menu trigger. Feedback is a persistent icon
+            here (live-review fix) rather than something buried in the You
+            tab — reachable from literally every screen without navigating
+            away from whatever the user was doing. */}
         <header className="sticky top-0 z-40 flex h-14 items-center justify-between gap-3 border-b border-border bg-bg/80 px-4 backdrop-blur lg:hidden">
           <Logo />
-          <div className="flex items-center gap-1">{barAction}</div>
+          <div className="flex items-center gap-1">
+            {barAction}
+            <Link
+              to="/feedback"
+              aria-label="Feedback"
+              className="grid h-9 w-9 place-items-center rounded-lg text-muted transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:bg-surface hover:text-text"
+            >
+              <FeedbackIcon />
+            </Link>
+          </div>
         </header>
 
         <div className="hidden lg:block">

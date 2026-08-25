@@ -135,7 +135,10 @@ export default function Search() {
 
   return (
     <Page width="wide">
-      <PageHeader title="Discover" subtitle="Search the catalogue, or browse by language and mood." />
+      {/* DiscoverTabs now carries the mode-specific subtitle that used to
+          be a static PageHeader subtitle here (live-review fix) — keeping
+          both would just repeat the same sentence twice. */}
+      <PageHeader title="Discover" />
 
       <DiscoverTabs />
 

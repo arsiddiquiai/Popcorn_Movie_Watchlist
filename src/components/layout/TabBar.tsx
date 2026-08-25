@@ -14,10 +14,10 @@ interface Tab {
 // still exist at their own URLs, just reached from inside Search and the
 // "You" tab (Taste DNA) respectively, not from a sixth/seventh tab here.
 const TABS: Tab[] = [
-  { to: '/', label: 'Shelf', end: true, Icon: ShelfIcon },
+  { to: '/', label: 'Watchlist', end: true, Icon: ShelfIcon },
   { to: '/search', label: 'Search', Icon: SearchIcon },
   { to: '/pick', label: 'Pick', Icon: DiceIcon },
-  { to: '/assistant', label: 'Assistant', Icon: AssistantIcon },
+  { to: '/assistant', label: 'AI Assistant', Icon: AssistantIcon },
   { to: '/taste', label: 'You', Icon: YouIcon },
 ]
 
@@ -57,7 +57,7 @@ export function TabBar() {
           to={tab.to}
           end={tab.end}
           className={({ isActive }) =>
-            `relative flex h-16 flex-1 flex-col items-center justify-center gap-1 font-ui text-[10px] font-medium transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
+            `relative flex h-16 flex-1 flex-col items-center justify-center gap-1 px-0.5 font-ui font-medium transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] ${
               isActive ? 'text-accent-warm' : 'text-muted'
             }`
           }
@@ -68,7 +68,11 @@ export function TabBar() {
                 <span aria-hidden="true" className="absolute inset-x-5 top-0 h-[3px] rounded-full bg-accent-warm" />
               )}
               <tab.Icon />
-              <span>{tab.label}</span>
+              {/* 9px rather than the original 10px, and nowrap+tight
+                  tracking — "AI Assistant" is the longest label and needs
+                  to clear a ~72px column at 360px viewport width without
+                  wrapping or truncating (live-review fix). */}
+              <span className="whitespace-nowrap text-[9px] tracking-tight">{tab.label}</span>
             </>
           )}
         </NavLink>

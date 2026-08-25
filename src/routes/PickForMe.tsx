@@ -184,8 +184,12 @@ export default function PickForMe() {
   }
 
   if (phase === 'form') {
+    // Not vertically centered in the viewport (live-review fix) — that was
+    // the dead space above "How are you feeling tonight?": the question is
+    // meant to be the first substantial thing on screen, same density rule
+    // already applied to Watchlist (DESIGN.md §3).
     return (
-      <div className="flex min-h-screen items-center justify-center px-6 py-12">
+      <div className="flex flex-col items-center px-6 pt-8 pb-12 sm:pt-10">
         <MoodForm value={input} onChange={setInput} onSubmit={() => void handleSubmit()} />
       </div>
     )
