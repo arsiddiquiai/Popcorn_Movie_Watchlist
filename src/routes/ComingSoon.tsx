@@ -7,7 +7,6 @@ const COMING_SOON = [
   { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
   { title: 'Public share links', description: 'Read-only links to share your watchlist or ratings.' },
   { title: 'Social feed / following', description: 'See what friends are watching and rating.' },
-  { title: 'Duo Match', description: 'Find something to watch together with a partner.' },
   { title: 'PDF export', description: 'Download your watchlist as a formatted document.' },
 ]
 

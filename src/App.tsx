@@ -6,6 +6,8 @@ import AccountDeleted from './routes/AccountDeleted'
 import Assistant from './routes/Assistant'
 import CinemaBridge from './routes/CinemaBridge'
 import ComingSoon from './routes/ComingSoon'
+import DuoInvite from './routes/DuoInvite'
+import DuoSession from './routes/DuoSession'
 import Feedback from './routes/Feedback'
 import { Privacy, Terms } from './routes/Legal'
 import MovieDetail from './routes/MovieDetail'
@@ -41,6 +43,12 @@ function App() {
                 visitor can view it too; nothing here depends on auth
                 state. */}
             <Route path="/w/:token" element={<PublicShare />} />
+            {/* Deliberately outside ProtectedLayout, same as /w/:token —
+                but unlike that route, there is nothing to actually show an
+                unauthenticated visitor here (no anon grants exist on
+                duo_sessions/duo_votes at all). This page's only job for a
+                logged-out visitor is sending them to sign in/up first. */}
+            <Route path="/duo/:token" element={<DuoInvite />} />
             <Route element={<ProtectedLayout />}>
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />
@@ -48,6 +56,7 @@ function App() {
               <Route path="/bridge" element={<CinemaBridge />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/pick" element={<PickForMe />} />
+              <Route path="/duo/session/:sessionId" element={<DuoSession />} />
               <Route path="/taste" element={<TasteDNA />} />
               <Route path="/coming-soon" element={<ComingSoon />} />
               <Route path="/feedback" element={<Feedback />} />

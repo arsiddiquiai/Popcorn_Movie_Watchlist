@@ -109,9 +109,11 @@ ai_sessions      id · user_id · mode(pick|bridge|taste|assistant) · mood_text
 feedback         id · user_id(nullable) · message · contact_email(nullable) · created_at
 user_api_keys    id · user_id · provider(anthropic|openai|gemini) · encrypted_key · model_pref · created_at
 share_links      token(pk, opaque) · user_id · created_at
+duo_sessions     id · invite_token(unique) · host_user_id · guest_user_id(nullable) · candidates(jsonb) · created_at
+duo_votes        id · session_id · user_id · tmdb_id · liked(bool) · created_at
 ```
 
-RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`.
+RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`. `duo_sessions`/`duo_votes` are scoped to *both participants* of a session (host or guest), not to a single owner — see Duo Match below for why that's a deliberate exception, not a leak.
 `movies_cache` is shared reference data, readable by any authenticated user; writable (insert-only) by any
 authenticated user, bounded by shape CHECK constraints — no client can update or delete an existing row.
 **Favorites are derived** (`score >= 9`) — do not add a favorites column or table.
@@ -151,6 +153,7 @@ deletion this table cascades (`on delete cascade`) — see Public share links be
 | Privacy / Terms | — | Static legal pages, footer-linked |
 | Account Deleted | — | Post-deletion confirmation, outside auth entirely |
 | Public Share (`/w/{token}`) | — | No login required — a visitor's view of someone else's live want-list, with a signup CTA |
+| Duo Match (`/duo/{token}`, `/duo/session/{id}`) | Decide | Two people swipe the same fixed deck; a match is a film they both liked |
 
 ---
 
@@ -250,6 +253,39 @@ for a returning user) since it's a no-op whenever there's no pending token.
 
 ---
 
+## Duo Match
+
+Two people swipe through the same fixed candidate deck (20 films from TMDB's trending list, snapshotted once at
+session creation — a live re-fetch would risk handing the guest a different deck than the host saw earlier, since
+trending shifts day to day); a match is a `tmdb_id` both of them voted `liked = true` on.
+
+**RLS is participant-scoped, not owner-scoped** — the one deliberate exception to this project's usual "a user
+reads only their own rows" shape. Both `duo_sessions` and `duo_votes` policies check `auth.uid() IN (host_user_id,
+guest_user_id)` (via a subquery on `duo_votes`, since a vote row itself carries no session-participant column),
+because computing a match requires each participant to see the *other's* votes too, not just their own.
+
+**The one server-side exception: joining.** A brand-new guest, at the moment they try to join via invite link, is
+neither the host nor an already-recorded participant — no owner-based RLS predicate can authorize that first
+write for them. `api/duo-join.ts` handles exactly that one transition through the service-role client (same shape
+as `api/share.ts`'s GET needing it for an anonymous visitor), using a compare-and-swap update
+(`.is('guest_user_id', null)`) so two people tapping the same invite link at once can't race each other into an
+inconsistent state. Every other read/write — creating a session, voting, reading the deck and checking for
+matches — goes through the caller's own JWT-scoped client directly, once they're genuinely attached as host or
+guest.
+
+**No anon access at all.** Unlike the public share link, an invite is never shown to a logged-out visitor —
+`/duo/{token}` (`src/routes/DuoInvite.tsx`) sends them to sign in/signup first, holding the token in
+`sessionStorage` exactly like the pending share-list import, then completes the join automatically on `SIGNED_IN`
+(`completePendingDuoJoin` in `src/lib/duoMatch.ts`). Because `AuthProvider` sits outside the router in `App.tsx`
+and has no `useNavigate()` of its own, the join's result is relayed through one more `sessionStorage` key that
+`ProtectedLayout` reads-and-clears on its next mount, redirecting the guest straight to `/duo/session/{id}`.
+
+**Sync is polling, not Supabase Realtime** (`POLL_INTERVAL_MS` in `src/routes/DuoSession.tsx`) — this project has
+no existing live-channel infrastructure to build on, and a v1 session is two people on their phones for a few
+minutes, not a latency-sensitive experience. Upgradeable later without touching this screen's own matching logic.
+
+---
+
 ## Feedback & operational email
 
 `api/feedback.ts` inserts into `feedback` and sends a notification via `server/email.ts` (Resend,
@@ -265,12 +301,12 @@ limitation in `server/email.ts` rather than assumed away.
 
 **Must:** auth · search · watchlist · mark watched · rating slider · movie detail · Pick For Me · Discover/Decide split · themes · regional-language discovery · trending.
 
-**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively).
+**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively) · Duo Match (`/duo/{token}`, `duo_sessions`/`duo_votes`, participant-scoped RLS — see Duo Match above; moved off Parked as part of the post-launch roadmap agreed with the project owner, not built speculatively).
 
 **Could (cut in this order if hours slip):** watch providers → CSV export → reviews → Blind Spots.
 
 **Parked — do not build. Surface on the Coming Soon page instead:**
-TV shows & web series · social feed / following · Duo Match · PDF export.
+TV shows & web series · social feed / following · PDF export.
 
 If asked to add something outside this list, **flag it rather than building it.**
 
