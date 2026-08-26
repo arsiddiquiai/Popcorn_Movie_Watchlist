@@ -377,6 +377,16 @@ Anthropic `APIError` or an unhandled throw — **not** a 429/504, which are oper
 alert per error shape per hour. That throttle is per warm serverless instance, not global — documented as a known
 limitation in `server/email.ts` rather than assumed away.
 
+The client calls this at `/api/feedback` (Vercel's default file-based route), not a custom `vercel.json` rewrite —
+a live bug found in a 2026-08-26 hardening pass: `/feedback` was *also* the client-side route for the Feedback
+screen (`App.tsx`), so a `vercel.json` rewrite that claimed the same path for the API silently shadowed the SPA
+there. Any hard navigation (refresh, bookmark, shared link, browser back/forward) hit the POST-only function
+directly and got a bare 405 instead of the page. Fixed by dropping that rewrite and pointing the fetch at the
+function's real path instead. **When adding a new API endpoint, give it a rewrite path only if nothing in
+`App.tsx`'s route table already uses that path** — `/ai`, `/user-api-key`, `/delete-account`, `/share`, and
+`/duo-join` are all safe today because none of them collide with a client route; check `src/App.tsx` before adding
+another one.
+
 ---
 
 ## Scope discipline
