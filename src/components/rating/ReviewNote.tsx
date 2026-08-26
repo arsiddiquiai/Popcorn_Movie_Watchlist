@@ -4,6 +4,10 @@ import { saveReviewText } from '../../lib/ratings'
 interface ReviewNoteProps {
   ratingId: string
   initialText: string | null
+  /** Defaults to lib/ratings' saveReviewText — TvDetail.tsx passes
+   *  lib/tvRatings' saveTvReviewText instead, same shape, so this
+   *  component needed no other change to support TV ratings too. */
+  onSave?: (ratingId: string, text: string) => Promise<void>
 }
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error'
@@ -11,7 +15,7 @@ type SaveState = 'idle' | 'saving' | 'saved' | 'error'
 /** Optional free-text note on a rating. Collapsed by default — one tap to
  *  expand, entirely skippable — so it adds zero friction to the core
  *  slider -> why-chips flow it sits below. */
-export function ReviewNote({ ratingId, initialText }: ReviewNoteProps) {
+export function ReviewNote({ ratingId, initialText, onSave = saveReviewText }: ReviewNoteProps) {
   const [expanded, setExpanded] = useState(() => Boolean(initialText))
   const [text, setText] = useState(initialText ?? '')
   const [saveState, setSaveState] = useState<SaveState>('idle')
@@ -20,7 +24,7 @@ export function ReviewNote({ ratingId, initialText }: ReviewNoteProps) {
     if (text.trim() === (initialText ?? '').trim()) return // nothing changed, skip the write
     setSaveState('saving')
     try {
-      await saveReviewText(ratingId, text)
+      await onSave(ratingId, text)
       setSaveState('saved')
     } catch {
       setSaveState('error')

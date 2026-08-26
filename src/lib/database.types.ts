@@ -292,6 +292,111 @@ export interface Database {
         }
         Relationships: []
       }
+      tv_cache: {
+        Row: {
+          tmdb_id: number
+          name: string
+          poster_path: string | null
+          backdrop_path: string | null
+          first_air_year: number | null
+          episode_run_minutes: number | null
+          genres: string[] | null
+          overview: string | null
+          tmdb_rating: number | null
+          original_language: string | null
+          trailer_key: string | null
+          credits: Json | null
+          cached_at: string | null
+        }
+        Insert: {
+          tmdb_id: number
+          name: string
+          poster_path?: string | null
+          backdrop_path?: string | null
+          first_air_year?: number | null
+          episode_run_minutes?: number | null
+          genres?: string[] | null
+          overview?: string | null
+          tmdb_rating?: number | null
+          original_language?: string | null
+          trailer_key?: string | null
+          credits?: Json | null
+          cached_at?: string | null
+        }
+        Update: {
+          tmdb_id?: number
+          name?: string
+          poster_path?: string | null
+          backdrop_path?: string | null
+          first_air_year?: number | null
+          episode_run_minutes?: number | null
+          genres?: string[] | null
+          overview?: string | null
+          tmdb_rating?: number | null
+          original_language?: string | null
+          trailer_key?: string | null
+          credits?: Json | null
+          cached_at?: string | null
+        }
+        Relationships: []
+      }
+      tv_watchlist_items: {
+        Row: {
+          id: string
+          user_id: string
+          tmdb_id: number
+          status: WatchlistStatus
+          added_at: string
+          watched_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tmdb_id: number
+          status?: WatchlistStatus
+          added_at?: string
+          watched_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tmdb_id?: number
+          status?: WatchlistStatus
+          added_at?: string
+          watched_at?: string | null
+        }
+        Relationships: []
+      }
+      tv_ratings: {
+        Row: {
+          id: string
+          user_id: string
+          tmdb_id: number
+          score: number
+          reason_tags: string[] | null
+          review_text: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          tmdb_id: number
+          score: number
+          reason_tags?: string[] | null
+          review_text?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          tmdb_id?: number
+          score?: number
+          reason_tags?: string[] | null
+          review_text?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -314,3 +419,6 @@ export type AiSession = Tables<'ai_sessions'>
 export type Feedback = Tables<'feedback'>
 export type UserApiKey = Tables<'user_api_keys'>
 export type ShareCardCache = Tables<'share_card_cache'>
+export type TvCache = Tables<'tv_cache'>
+export type TvWatchlistItem = Tables<'tv_watchlist_items'>
+export type TvRating = Tables<'tv_ratings'>

@@ -1,11 +1,10 @@
 import { Page, PageHeader } from '../components/layout/Page'
 
 // CLAUDE.md's "Parked" list — a roadmap statement, not a promise with a
-// date. No functionality behind any of these. AI Movie Assistant and
-// public share links are no longer here — both shipped, and PDF export
-// (below) just did too; only genuinely unbuilt items stay listed.
+// date. No functionality behind any of these. AI Movie Assistant, public
+// share links, PDF export, and TV shows/web series/anime are no longer
+// here — all shipped; only genuinely unbuilt items stay listed.
 const COMING_SOON = [
-  { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
   { title: 'Social feed / following', description: 'See what friends are watching and rating.' },
   { title: 'Duo Match', description: 'Find something to watch together with a partner.' },
 ]

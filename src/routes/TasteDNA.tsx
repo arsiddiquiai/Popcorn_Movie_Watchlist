@@ -220,6 +220,23 @@ export default function TasteDNA() {
       <PrimaryAccountActions />
       <ShareWatchlistCard />
 
+      {/* v1 TV entry point — no room on the fixed 5-item TabBar, and Search
+          deliberately wasn't given a Movies/TV toggle (too much interacting
+          effect logic there to risk for a first cut of TV support), so
+          this link is the way in for now. */}
+      <NavLink
+        to="/tv"
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/30"
+      >
+        <span>
+          <span className="block font-medium">My TV List</span>
+          <span className="mt-0.5 block text-xs text-muted">Shows, series & anime — search, save, rate.</span>
+        </span>
+        <span aria-hidden="true" className="text-muted">
+          →
+        </span>
+      </NavLink>
+
       {body}
 
       <ComingSoonTeaser />
