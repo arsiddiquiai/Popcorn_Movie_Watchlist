@@ -1,14 +1,13 @@
 import { Page, PageHeader } from '../components/layout/Page'
 
-// CLAUDE.md's "Parked" list, verbatim — a roadmap statement, not a promise
-// with a date. No functionality behind any of these. AI Movie Assistant is
-// no longer here — it shipped, and lives in the Discover nav group instead.
+// CLAUDE.md's "Parked" list — a roadmap statement, not a promise with a
+// date. No functionality behind any of these. AI Movie Assistant and
+// public share links are no longer here — both shipped, and PDF export
+// (below) just did too; only genuinely unbuilt items stay listed.
 const COMING_SOON = [
   { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
-  { title: 'Public share links', description: 'Read-only links to share your watchlist or ratings.' },
   { title: 'Social feed / following', description: 'See what friends are watching and rating.' },
   { title: 'Duo Match', description: 'Find something to watch together with a partner.' },
-  { title: 'PDF export', description: 'Download your watchlist as a formatted document.' },
 ]
 
 export default function ComingSoon() {

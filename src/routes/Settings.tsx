@@ -6,6 +6,7 @@ import { ByokError, deleteApiKey, getSavedKeyMeta, saveApiKey, type SavedKeyMeta
 import { DeleteAccountError, deleteAccount } from '../lib/deleteAccountClient'
 import type { AiProvider } from '../lib/database.types'
 import { downloadWatchlistCsv } from '../lib/exportData'
+import { downloadWatchlistPdf } from '../lib/exportPdf'
 import { useTheme } from '../theme/ThemeProvider'
 import type { Theme } from '../theme/types'
 
@@ -30,6 +31,7 @@ export default function Settings() {
   const navigate = useNavigate()
   const { theme, setTheme, reducedMotion, setReducedMotion } = useTheme()
   const [exportState, setExportState] = useState<ExportState>('idle')
+  const [pdfExportState, setPdfExportState] = useState<ExportState>('idle')
 
   async function handleExport() {
     if (!user || exportState === 'exporting') return
@@ -39,6 +41,18 @@ export default function Settings() {
       setExportState('idle')
     } catch {
       setExportState('error')
+    }
+  }
+
+  async function handlePdfExport() {
+    if (!user || pdfExportState === 'exporting') return
+    setPdfExportState('exporting')
+    try {
+      const displayName = typeof user.user_metadata?.display_name === 'string' ? user.user_metadata.display_name : null
+      await downloadWatchlistPdf(user.id, displayName)
+      setPdfExportState('idle')
+    } catch {
+      setPdfExportState('error')
     }
   }
 
@@ -182,20 +196,33 @@ export default function Settings() {
             <div>
               <h3 className="font-ui text-sm font-semibold text-text">Export your data</h3>
               <p className="mt-1 font-ui text-xs leading-relaxed text-muted">
-                Download your watchlist as a CSV — title, status, dates, ratings, and notes.
+                Download your watchlist — title, status, dates, ratings, and notes.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => void handleExport()}
-              disabled={exportState === 'exporting'}
-              className="shrink-0 rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 disabled:opacity-60"
-            >
-              {exportState === 'exporting' ? 'Exporting…' : 'Export CSV'}
-            </button>
+            <div className="flex shrink-0 gap-2">
+              <button
+                type="button"
+                onClick={() => void handleExport()}
+                disabled={exportState === 'exporting'}
+                className="rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 disabled:opacity-60"
+              >
+                {exportState === 'exporting' ? 'Exporting…' : 'Export CSV'}
+              </button>
+              <button
+                type="button"
+                onClick={() => void handlePdfExport()}
+                disabled={pdfExportState === 'exporting'}
+                className="rounded-full border border-border px-4 py-2 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/40 disabled:opacity-60"
+              >
+                {pdfExportState === 'exporting' ? 'Exporting…' : 'Export PDF'}
+              </button>
+            </div>
           </div>
           {exportState === 'error' && (
-            <p className="font-ui text-xs text-accent-cold">Couldn't export your data. Try again.</p>
+            <p className="font-ui text-xs text-accent-cold">Couldn't export your CSV. Try again.</p>
+          )}
+          {pdfExportState === 'error' && (
+            <p className="font-ui text-xs text-accent-cold">Couldn't export your PDF. Try again.</p>
           )}
         </div>
       </Section>
