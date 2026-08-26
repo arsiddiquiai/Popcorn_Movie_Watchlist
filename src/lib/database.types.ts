@@ -397,6 +397,63 @@ export interface Database {
         }
         Relationships: []
       }
+      duo_sessions: {
+        Row: {
+          id: string
+          invite_token: string
+          host_user_id: string
+          guest_user_id: string | null
+          /** DuoCandidate[] (see below), stored as jsonb — a fixed
+           *  snapshot taken once at creation, not re-fetched from TMDB on
+           *  every read. */
+          candidates: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          invite_token: string
+          host_user_id: string
+          guest_user_id?: string | null
+          candidates: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          invite_token?: string
+          host_user_id?: string
+          guest_user_id?: string | null
+          candidates?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
+      duo_votes: {
+        Row: {
+          id: string
+          session_id: string
+          user_id: string
+          tmdb_id: number
+          liked: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          session_id: string
+          user_id: string
+          tmdb_id: number
+          liked: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          session_id?: string
+          user_id?: string
+          tmdb_id?: number
+          liked?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -422,3 +479,5 @@ export type ShareCardCache = Tables<'share_card_cache'>
 export type TvCache = Tables<'tv_cache'>
 export type TvWatchlistItem = Tables<'tv_watchlist_items'>
 export type TvRating = Tables<'tv_ratings'>
+export type DuoSession = Tables<'duo_sessions'>
+export type DuoVote = Tables<'duo_votes'>

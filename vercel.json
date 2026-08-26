@@ -18,6 +18,9 @@
     },
     "api/share.ts": {
       "maxDuration": 10
+    },
+    "api/duo-join.ts": {
+      "maxDuration": 10
     }
   },
 
@@ -27,6 +30,7 @@
     { "source": "/user-api-key", "destination": "/api/user-api-key" },
     { "source": "/delete-account", "destination": "/api/delete-account" },
     { "source": "/share", "destination": "/api/share" },
+    { "source": "/duo-join", "destination": "/api/duo-join" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }

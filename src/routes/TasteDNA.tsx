@@ -4,6 +4,7 @@ import { Link, NavLink } from 'react-router-dom'
 import { AccountFooterLinks } from '../components/layout/AccountFooterLinks'
 import { AccountHeader } from '../components/layout/AccountHeader'
 import { PrimaryAccountActions } from '../components/layout/PrimaryAccountActions'
+import { DuoMatchCard } from '../components/layout/DuoMatchCard'
 import { ShareWatchlistCard } from '../components/layout/ShareWatchlistCard'
 import { Spinner } from '../components/ui/Spinner'
 import { requestTaste, TasteError, type TasteResult } from '../lib/tasteClient'
@@ -219,6 +220,7 @@ export default function TasteDNA() {
       <AccountHeader />
       <PrimaryAccountActions />
       <ShareWatchlistCard />
+      <DuoMatchCard />
 
       {/* v1 TV entry point — no room on the fixed 5-item TabBar, and Search
           deliberately wasn't given a Movies/TV toggle (too much interacting

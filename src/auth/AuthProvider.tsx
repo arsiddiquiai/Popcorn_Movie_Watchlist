@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabaseClient'
+import { completePendingDuoJoin } from '../lib/duoMatch'
 import { importPendingSharedList } from '../lib/shareLink'
 import type { AuthContextValue } from './types'
 
@@ -30,6 +31,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // share link.
       if (event === 'SIGNED_IN' && newSession?.user) {
         void importPendingSharedList(newSession.user.id)
+        // Same "no-op unless there's a pending token" shape as the share-
+        // list import above — this only does anything for someone
+        // completing a Duo Match invite's sign-in/signup step.
+        void completePendingDuoJoin()
       }
     })
 
