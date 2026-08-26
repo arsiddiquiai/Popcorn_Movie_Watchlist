@@ -38,6 +38,16 @@ interface RatingPanelProps {
    *  whatever existingRating was at mount, since this panel otherwise
    *  keeps the saved Rating entirely to itself. */
   onRatingSaved?: (rating: Rating) => void
+  /** Injectable persistence — defaults to lib/ratings' movie functions, so
+   *  every existing call site keeps its exact current behaviour with zero
+   *  changes. TvDetail.tsx passes lib/tvRatings' equivalents instead,
+   *  which return the structurally-identical TvRating shape (same
+   *  columns as Rating — see the TV migration's own comment on why it's a
+   *  fully parallel table rather than a shared one) — this whole panel's
+   *  animation/UI logic needed nothing else changed to support TV too. */
+  saveScoreFn?: (userId: string, tmdbId: number, score: number) => Promise<Rating>
+  saveReasonTagsFn?: (ratingId: string, tags: string[]) => Promise<void>
+  saveReviewTextFn?: (ratingId: string, text: string) => Promise<void>
 }
 
 export function RatingPanel({
@@ -49,6 +59,9 @@ export function RatingPanel({
   onScoreChange,
   onRelease,
   onRatingSaved,
+  saveScoreFn = saveScore,
+  saveReasonTagsFn = saveReasonTags,
+  saveReviewTextFn,
 }: RatingPanelProps) {
   const { reducedMotion } = useTheme()
   const { cold, neutral, warm } = useRatingColors()
@@ -95,7 +108,7 @@ export function RatingPanel({
     setSaving(true)
     setSaveError(false)
     try {
-      const saved = await saveScore(userId, tmdbId, finalScore)
+      const saved = await saveScoreFn(userId, tmdbId, finalScore)
       setRating(saved)
       setTags(saved.reason_tags ?? [])
       onRatingSaved?.(saved)
@@ -104,7 +117,7 @@ export function RatingPanel({
     } finally {
       setSaving(false)
     }
-  }, [onRatingSaved, onRelease, panelControls, reducedMotion, tmdbId, userId])
+  }, [onRatingSaved, onRelease, panelControls, reducedMotion, saveScoreFn, tmdbId, userId])
 
   // Release is tracked on the window rather than the input: dragging a
   // range thumb frequently ends with the pointer outside the element.
@@ -132,7 +145,7 @@ export function RatingPanel({
     const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag]
     setTags(next)
     try {
-      await saveReasonTags(rating.id, next)
+      await saveReasonTagsFn(rating.id, next)
     } catch {
       setTags(tags) // revert on failure
     }
@@ -209,7 +222,7 @@ export function RatingPanel({
       {rating && !saveError && (
         <>
           <WhyChips selected={tags} onToggle={(tag) => void toggleTag(tag)} disabled={saving} />
-          <ReviewNote ratingId={rating.id} initialText={rating.review_text} />
+          <ReviewNote ratingId={rating.id} initialText={rating.review_text} onSave={saveReviewTextFn} />
           {/* Only offered on a 9-10 — isFavoriteScore is the same threshold
               the star badge above already uses, so "share-worthy" and
               "favorite" stay one definition rather than two. Dismissible in

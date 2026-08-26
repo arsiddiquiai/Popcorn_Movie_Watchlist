@@ -4,7 +4,6 @@ import { Page, PageHeader } from '../components/layout/Page'
 // with a date. No functionality behind any of these. AI Movie Assistant is
 // no longer here — it shipped, and lives in the Discover nav group instead.
 const COMING_SOON = [
-  { title: 'TV shows, web series & anime', description: 'Extending Popcorn beyond movies.' },
   { title: 'Public share links', description: 'Read-only links to share your watchlist or ratings.' },
   { title: 'Social feed / following', description: 'See what friends are watching and rating.' },
   { title: 'Duo Match', description: 'Find something to watch together with a partner.' },

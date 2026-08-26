@@ -109,9 +109,15 @@ ai_sessions      id · user_id · mode(pick|bridge|taste|assistant) · mood_text
 feedback         id · user_id(nullable) · message · contact_email(nullable) · created_at
 user_api_keys    id · user_id · provider(anthropic|openai|gemini) · encrypted_key · model_pref · created_at
 share_links      token(pk, opaque) · user_id · created_at
+tv_cache         tmdb_id(pk) · name · poster_path · backdrop_path · first_air_year ·
+                 episode_run_minutes · genres(text[]) · overview · tmdb_rating ·
+                 original_language · trailer_key · credits(jsonb)
+tv_watchlist_items  id · user_id · tmdb_id · status(want|watched|dropped) · added_at · watched_at
+tv_ratings       id · user_id · tmdb_id · score(int 1-10) · reason_tags(text[]) ·
+                 review_text · created_at
 ```
 
-RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`.
+RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`, `tv_watchlist_items`, `tv_ratings`.
 `movies_cache` is shared reference data, readable by any authenticated user; writable (insert-only) by any
 authenticated user, bounded by shape CHECK constraints — no client can update or delete an existing row.
 **Favorites are derived** (`score >= 9`) — do not add a favorites column or table.
@@ -132,6 +138,9 @@ rows, and their display name via `auth.admin.getUserById`) through the service-r
 visitor has no session for any RLS policy to key off. `anon` has no grants on this table whatsoever. On account
 deletion this table cascades (`on delete cascade`) — see Public share links below for the full design.
 
+`tv_cache`/`tv_watchlist_items`/`tv_ratings` are fully parallel to `movies_cache`/`watchlist_items`/`ratings` —
+same shapes, same RLS shapes — rather than a shared schema with a media-type column. See TV shows below for why.
+
 ---
 
 ## Screens
@@ -151,6 +160,8 @@ deletion this table cascades (`on delete cascade`) — see Public share links be
 | Privacy / Terms | — | Static legal pages, footer-linked |
 | Account Deleted | — | Post-deletion confirmation, outside auth entirely |
 | Public Share (`/w/{token}`) | — | No login required — a visitor's view of someone else's live want-list, with a signup CTA |
+| My TV List (`/tv`) | Both | v1 TV/anime home — search, watchlist, rating. Reached from the You tab, no TabBar slot |
+| TV Detail (`/tv/{tmdbId}`) | Both | Standalone from Movie Detail — metadata, trailer, cast, mark watched, rating slider (reused from Movie Detail) |
 
 ---
 
@@ -250,6 +261,44 @@ for a returning user) since it's a no-op whenever there's no pending token.
 
 ---
 
+## TV shows, web series & anime
+
+v1 scope, agreed before building: search + watchlist + rating only, whole-series granularity (no per-episode
+tracking). Pick For Me, Cinema Bridge, and Taste DNA stay movies-only for now — added later if this lands well.
+
+**Fully parallel tables, not a shared schema.** `watchlist_items.tmdb_id` and `ratings.tmdb_id` both carry a real
+foreign key to `movies_cache(tmdb_id)` — a live constraint on tables already holding real users' data. TMDB's movie
+and TV id spaces are separate and can collide numerically, so making those existing columns TV-aware would mean
+altering or dropping that FK (Postgres can't express "references table A OR table B" in one constraint) — a real
+change to tables the live app depends on every day. `tv_cache`/`tv_watchlist_items`/`tv_ratings` mirror their movie
+equivalents exactly instead: same shapes, same RLS shapes, zero `ALTER` statements against anything that already
+existed. The cost is some duplicated schema and application code (`lib/tvWatchlist.ts`, `lib/tvRatings.ts`,
+`TvDetail.tsx`, `TvWatchlist.tsx` alongside their movie equivalents) — judged worth it for a feature this size to
+carry zero risk to the movie tables real users already depend on.
+
+**`RatingPanel` is shared, not duplicated** — it gained three optional injectable persistence props
+(`saveScoreFn`/`saveReasonTagsFn`/`saveReviewTextFn`, defaulting to `lib/ratings`' movie functions) rather than a
+`TvRatingPanel` fork, since `TvRating` is structurally identical to `Rating` (same columns) and the change is
+purely additive — every existing call site keeps its exact behaviour with zero changes. `TvDetail.tsx` passes
+`lib/tvRatings`' equivalents instead. `ReviewNote` got the same treatment (`onSave`, defaulting to
+`saveReviewText`).
+
+**`TvDetail`/`TvWatchlist` are standalone routes, not generalized from `MovieDetail`/`Watchlist`.** Those two are
+exercised by every current user every day; a bug introduced while generalizing them for TV would put that at risk
+for a brand-new, low-traffic screen that doesn't need to share their code to work. Deliberately simpler for v1: no
+`ReactivePoster` reuse (plain poster header instead), no shared-element `layoutId` transition into the detail
+screen, no swipe gestures or long-press action sheet on the watchlist grid. `posterLayoutId()` (`lib/sharedElement.ts`)
+did gain an optional `mediaType` parameter (default `'movie'`, so every existing call site is unaffected) against
+the day a TV search card wants the transition too — not yet wired up anywhere.
+
+**Entry point:** a "My TV List" link on the You tab, not a `TabBar` slot (fixed at 5 items by design) and not a
+Movies/TV toggle on `Search.tsx` (too much interacting effect logic there — debounce, browse-mode, Discover
+filters — to risk changing for a first cut of TV support). `/tv` carries its own lightweight search box
+(`searchTvShows`) alongside the Want/Watched grid, so TV discovery and TV watchlist management live in one place
+for v1 rather than needing a second route.
+
+---
+
 ## Feedback & operational email
 
 `api/feedback.ts` inserts into `feedback` and sends a notification via `server/email.ts` (Resend,
@@ -265,12 +314,12 @@ limitation in `server/email.ts` rather than assumed away.
 
 **Must:** auth · search · watchlist · mark watched · rating slider · movie detail · Pick For Me · Discover/Decide split · themes · regional-language discovery · trending.
 
-**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively).
+**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively) · TV shows/web series/anime (`/tv`, `/tv/{tmdbId}`, fully parallel `tv_*` tables — see TV shows above; v1 scope is search/watchlist/rating only, moved off Parked as part of the post-launch roadmap agreed with the project owner).
 
 **Could (cut in this order if hours slip):** watch providers → CSV export → reviews → Blind Spots.
 
 **Parked — do not build. Surface on the Coming Soon page instead:**
-TV shows & web series · social feed / following · Duo Match · PDF export.
+social feed / following · Duo Match · PDF export.
 
 If asked to add something outside this list, **flag it rather than building it.**
 

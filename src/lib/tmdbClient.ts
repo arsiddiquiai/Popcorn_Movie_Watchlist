@@ -238,3 +238,62 @@ export function pickTrailerKey(videos: TmdbMovieDetails['videos']): string | nul
   const official = trailers.find((v) => v.official)
   return (official ?? trailers[0])?.key ?? null
 }
+
+// ---------------------------------------------------------------------------
+// TV shows, web series & anime — v1 scope: search + detail only, added here
+// rather than a separate file since they share this file's api-key/fetch-
+// helper/error-handling setup, and are pure additions that touch nothing
+// above. TMDB's /tv endpoints cover web series and anime too (anime is TV
+// shows with original_language='ja' plus the Animation genre, not a
+// separate TMDB media type) — no extra API or credential needed.
+// ---------------------------------------------------------------------------
+
+export interface TmdbSearchTv {
+  id: number
+  name: string
+  poster_path: string | null
+  first_air_date: string
+  vote_average: number
+  original_language: string
+}
+
+interface TmdbTvSearchResponse {
+  page: number
+  results: TmdbSearchTv[]
+  total_results: number
+  total_pages: number
+}
+
+export async function searchTvShows(query: string, signal?: AbortSignal): Promise<TmdbSearchTv[]> {
+  const trimmed = query.trim()
+  if (!trimmed) return []
+  const data = await tmdbFetch<TmdbTvSearchResponse>('/search/tv', { query: trimmed, include_adult: 'false' }, signal)
+  return data.results
+}
+
+export async function getTrendingTvShows(signal?: AbortSignal): Promise<TmdbSearchTv[]> {
+  const data = await tmdbFetch<TmdbTvSearchResponse>('/trending/tv/week', {}, signal)
+  return data.results
+}
+
+export interface TmdbTvDetails {
+  id: number
+  name: string
+  poster_path: string | null
+  backdrop_path: string | null
+  first_air_date: string
+  /** TMDB reports this as an array (it can vary by season); the first
+   *  entry is used as a representative runtime, same simplification the
+   *  rest of this app's "runtime" concept already makes for movies. */
+  episode_run_time: number[]
+  genres: { id: number; name: string }[]
+  overview: string
+  vote_average: number
+  original_language: string
+  videos?: { results: TmdbVideo[] }
+  credits?: { cast: TmdbCastMember[]; crew: TmdbCrewMember[] }
+}
+
+export async function getTvDetails(tmdbId: number, signal?: AbortSignal): Promise<TmdbTvDetails> {
+  return tmdbFetch<TmdbTvDetails>(`/tv/${tmdbId}`, { append_to_response: 'videos,credits' }, signal)
+}

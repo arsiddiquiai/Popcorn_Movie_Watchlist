@@ -15,6 +15,8 @@ import ResetPassword from './routes/ResetPassword'
 import Search from './routes/Search'
 import Settings from './routes/Settings'
 import TasteDNA from './routes/TasteDNA'
+import TvDetail from './routes/TvDetail'
+import TvWatchlist from './routes/TvWatchlist'
 import Watchlist from './routes/Watchlist'
 import { ThemeProvider } from './theme/ThemeProvider'
 
@@ -45,6 +47,8 @@ function App() {
               <Route path="/" element={<Watchlist />} />
               <Route path="/search" element={<Search />} />
               <Route path="/movie/:tmdbId" element={<MovieDetail />} />
+              <Route path="/tv/:tmdbId" element={<TvDetail />} />
+              <Route path="/tv" element={<TvWatchlist />} />
               <Route path="/bridge" element={<CinemaBridge />} />
               <Route path="/assistant" element={<Assistant />} />
               <Route path="/pick" element={<PickForMe />} />
