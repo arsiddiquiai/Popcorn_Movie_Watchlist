@@ -26,7 +26,6 @@
 
   "rewrites": [
     { "source": "/ai", "destination": "/api/ai" },
-    { "source": "/feedback", "destination": "/api/feedback" },
     { "source": "/user-api-key", "destination": "/api/user-api-key" },
     { "source": "/delete-account", "destination": "/api/delete-account" },
     { "source": "/share", "destination": "/api/share" },

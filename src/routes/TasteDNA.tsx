@@ -30,27 +30,6 @@ function useChartColors() {
   return colors
 }
 
-/** A single row teasing the roadmap, not a full duplicate of ComingSoon's
- *  own preview cards (that content lives at /coming-soon and stays there —
- *  this is a link, not a re-render of it). */
-function ComingSoonTeaser() {
-  return (
-    <NavLink
-      to="/coming-soon"
-      end
-      className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface/60 px-5 py-4 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/30 lg:hidden"
-    >
-      <span>
-        <span className="block font-medium">What's coming next</span>
-        <span className="mt-0.5 block text-xs text-muted">TV shows, sharing, Duo Match, and more.</span>
-      </span>
-      <span aria-hidden="true" className="text-muted">
-        →
-      </span>
-    </NavLink>
-  )
-}
-
 export default function TasteDNA() {
   const [phase, setPhase] = useState<Phase>('loading')
   const [result, setResult] = useState<TasteResult | null>(null)
@@ -256,7 +235,6 @@ export default function TasteDNA() {
 
       {body}
 
-      <ComingSoonTeaser />
       <AccountFooterLinks />
     </div>
   )

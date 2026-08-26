@@ -19,7 +19,7 @@ export async function submitFeedback(
 
   let response: Response
   try {
-    response = await fetch('/feedback', {
+    response = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
       body: JSON.stringify({ message, contact_email: contactEmail }),
