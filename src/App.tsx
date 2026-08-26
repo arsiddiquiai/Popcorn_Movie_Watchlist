@@ -16,6 +16,7 @@ import PublicShare from './routes/PublicShare'
 import ResetPassword from './routes/ResetPassword'
 import Search from './routes/Search'
 import Settings from './routes/Settings'
+import SocialFeed from './routes/SocialFeed'
 import TasteDNA from './routes/TasteDNA'
 import TvDetail from './routes/TvDetail'
 import TvWatchlist from './routes/TvWatchlist'
@@ -62,6 +63,7 @@ function App() {
               <Route path="/pick" element={<PickForMe />} />
               <Route path="/duo/session/:sessionId" element={<DuoSession />} />
               <Route path="/taste" element={<TasteDNA />} />
+              <Route path="/feed" element={<SocialFeed />} />
               <Route path="/coming-soon" element={<ComingSoon />} />
               <Route path="/feedback" element={<Feedback />} />
               <Route path="/privacy" element={<Privacy />} />

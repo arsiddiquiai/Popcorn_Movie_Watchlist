@@ -454,6 +454,27 @@ export interface Database {
         }
         Relationships: []
       }
+      follows: {
+        Row: {
+          id: string
+          follower_user_id: string
+          share_token: string
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          follower_user_id: string
+          share_token: string
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          follower_user_id?: string
+          share_token?: string
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: Record<string, never>
@@ -481,3 +502,4 @@ export type TvWatchlistItem = Tables<'tv_watchlist_items'>
 export type TvRating = Tables<'tv_ratings'>
 export type DuoSession = Tables<'duo_sessions'>
 export type DuoVote = Tables<'duo_votes'>
+export type Follow = Tables<'follows'>

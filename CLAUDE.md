@@ -117,9 +117,10 @@ tv_ratings       id · user_id · tmdb_id · score(int 1-10) · reason_tags(text
                  review_text · created_at
 duo_sessions     id · invite_token(unique) · host_user_id · guest_user_id(nullable) · candidates(jsonb) · created_at
 duo_votes        id · session_id · user_id · tmdb_id · liked(bool) · created_at
+follows          id · follower_user_id · share_token · created_at
 ```
 
-RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`, `tv_watchlist_items`, `tv_ratings`. `duo_sessions`/`duo_votes` are scoped to *both participants* of a session (host or guest), not to a single owner — see Duo Match below for why that's a deliberate exception, not a leak.
+RLS: users access only their own rows in `profiles`, `watchlist_items`, `ratings`, `ai_sessions`, `feedback`, `user_api_keys`, `share_links`, `tv_watchlist_items`, `tv_ratings`, `follows`. `duo_sessions`/`duo_votes` are scoped to *both participants* of a session (host or guest), not to a single owner — see Duo Match below for why that's a deliberate exception, not a leak.
 
 `movies_cache` is shared reference data, readable by any authenticated user; writable (insert-only) by any
 authenticated user, bounded by shape CHECK constraints — no client can update or delete an existing row.
@@ -144,6 +145,11 @@ deletion this table cascades (`on delete cascade`) — see Public share links be
 `tv_cache`/`tv_watchlist_items`/`tv_ratings` are fully parallel to `movies_cache`/`watchlist_items`/`ratings` —
 same shapes, same RLS shapes — rather than a shared schema with a media-type column. See TV shows below for why.
 
+`follows` maps a follower to a `share_token` they chose to follow — not to a resolved `user_id` — so it can never
+expose anything `api/share.ts`'s public GET doesn't already return to anyone holding that link. Ordinary
+owner-scoped RLS (a follow row is create/delete only; no update policy exists). See Social feed below for why this
+needed zero new server code.
+
 ---
 
 ## Screens
@@ -166,6 +172,7 @@ same shapes, same RLS shapes — rather than a shared schema with a media-type c
 | My TV List (`/tv`) | Both | v1 TV/anime home — search, watchlist, rating. Reached from the You tab, no TabBar slot |
 | TV Detail (`/tv/{tmdbId}`) | Both | Standalone from Movie Detail — metadata, trailer, cast, mark watched, rating slider (reused from Movie Detail) |
 | Duo Match (`/duo/{token}`, `/duo/session/{id}`) | Decide | Two people swipe the same fixed deck; a match is a film they both liked |
+| Feed (`/feed`) | — | Follow a friend's share link, see their live want-list re-shown in your feed |
 
 ---
 
@@ -336,6 +343,31 @@ minutes, not a latency-sensitive experience. Upgradeable later without touching 
 
 ---
 
+## Social feed / following
+
+v1 scope, agreed before building: visibility is limited to exactly what a person has already made public via their
+own share link. There is no user directory, no "find people" search, and no way to follow someone who hasn't
+generated a share link — **following someone IS saving the `/w/{token}` link they chose to share**, the same
+opt-in action that already existed for that feature. This is a deliberate scope cut, not a first pass at something
+bigger: it reuses an already-shipped, already-audited privacy boundary instead of opening a new one.
+
+**Zero new server code.** `src/routes/SocialFeed.tsx` calls the exact same `fetchSharedList(token)`
+(`src/lib/shareLink.ts`, built for the public `/w/{token}` page) once per followed row and renders the results
+together. No ratings, no watched list, no other `profiles` column ever reaches this feature — the public GET never
+returned those in the first place, so there's nothing new to leak. `follows` stores a `share_token`, never a
+resolved `user_id` — a row where someone follows a since-deleted account's now-dead token simply resolves to
+nothing (the same "this link isn't around any more" state the public share page already shows for a stale token),
+never an error.
+
+**Ordinary owner-scoped RLS**, unlike Duo Match — there is no cross-user write to authorize here, since the only
+write this table ever needs is a user adding/removing their own follow row, which `auth.uid() = follower_user_id`
+covers directly. No service-role exception needed.
+
+**Entry point:** a "Feed" link on the You tab, same reasoning as My TV List above (no room on the fixed 5-item
+`TabBar`).
+
+---
+
 ## Feedback & operational email
 
 `api/feedback.ts` inserts into `feedback` and sends a notification via `server/email.ts` (Resend,
@@ -351,12 +383,12 @@ limitation in `server/email.ts` rather than assumed away.
 
 **Must:** auth · search · watchlist · mark watched · rating slider · movie detail · Pick For Me · Discover/Decide split · themes · regional-language discovery · trending.
 
-**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively) · TV shows/web series/anime (`/tv`, `/tv/{tmdbId}`, fully parallel `tv_*` tables — see TV shows above; v1 scope is search/watchlist/rating only, moved off Parked as part of the post-launch roadmap agreed with the project owner) · PDF export (Settings → "Your data", `lib/exportPdf.ts`, dynamically-imported jsPDF so the ~380KB of bundled dependencies it doesn't use never load for visitors who don't click it; moved off Parked as part of the same post-launch roadmap) · Duo Match (`/duo/{token}`, `duo_sessions`/`duo_votes`, participant-scoped RLS — see Duo Match above; moved off Parked as part of the post-launch roadmap agreed with the project owner, not built speculatively).
+**Should:** trailers · cast/director · filters · Surprise Me · Cinema Bridge · mood transformation · decay/Graveyard · Taste DNA + Blind Spots · why-chips · Web Share · reduced motion · AI Movie Assistant (30 messages/day cap) · public share links (`/w/{token}`, live want-list, opaque server-generated token — see `share_links` migration and `api/share.ts`; moved off Parked when explicitly requested, not built speculatively) · TV shows/web series/anime (`/tv`, `/tv/{tmdbId}`, fully parallel `tv_*` tables — see TV shows above; v1 scope is search/watchlist/rating only, moved off Parked as part of the post-launch roadmap agreed with the project owner) · PDF export (Settings → "Your data", `lib/exportPdf.ts`, dynamically-imported jsPDF so the ~380KB of bundled dependencies it doesn't use never load for visitors who don't click it; moved off Parked as part of the same post-launch roadmap) · Duo Match (`/duo/{token}`, `duo_sessions`/`duo_votes`, participant-scoped RLS — see Duo Match above; moved off Parked as part of the post-launch roadmap agreed with the project owner, not built speculatively) · social feed / following (`/feed`, `follows` table mapping a follower to a share token, zero new server code — see Social feed above; moved off Parked as the final item in the same post-launch roadmap).
 
 **Could (cut in this order if hours slip):** watch providers → CSV export → reviews → Blind Spots.
 
 **Parked — do not build. Surface on the Coming Soon page instead:**
-social feed / following.
+nothing currently parked — everything on the post-launch roadmap has shipped.
 
 If asked to add something outside this list, **flag it rather than building it.**
 

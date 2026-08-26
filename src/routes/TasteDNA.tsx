@@ -239,6 +239,21 @@ export default function TasteDNA() {
         </span>
       </NavLink>
 
+      {/* v1 Feed entry point — same reasoning as the TV link above: no
+          room on the fixed TabBar, so this is the way in for now. */}
+      <NavLink
+        to="/feed"
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-5 py-4 font-ui text-sm text-text transition-colors duration-[var(--transition-fast)] ease-[var(--ease-standard)] hover:border-accent-warm/30"
+      >
+        <span>
+          <span className="block font-medium">Feed</span>
+          <span className="mt-0.5 block text-xs text-muted">Follow a friend's share link and see their list.</span>
+        </span>
+        <span aria-hidden="true" className="text-muted">
+          →
+        </span>
+      </NavLink>
+
       {body}
 
       <ComingSoonTeaser />
