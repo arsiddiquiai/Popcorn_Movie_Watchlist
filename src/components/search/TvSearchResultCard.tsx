@@ -16,7 +16,17 @@ function airYear(firstAirDate: string): string {
  * shared-element poster transition for v1 (same scope call as
  * TvDetail/TvWatchlist), just poster + title + a plain Add button.
  */
-export function TvSearchResultCard({ show }: { show: TmdbSearchTv }) {
+interface TvSearchResultCardProps {
+  show: TmdbSearchTv
+  /** Fires after a successful add — TvWatchlist.tsx uses this to refetch
+   *  its Want-tab grid. Found via real-device testing: the grid's own
+   *  fetch effect only depends on [user, tab], so clearing the search box
+   *  after adding a show left "Nothing queued yet" showing even though
+   *  the add had genuinely succeeded — nothing ever told it to refetch. */
+  onAdded?: () => void
+}
+
+export function TvSearchResultCard({ show, onAdded }: TvSearchResultCardProps) {
   const { user } = useAuth()
   const [state, setState] = useState<AddState>('idle')
   const posterUrl = tmdbImageUrl(show.poster_path, 'w342')
@@ -27,6 +37,7 @@ export function TvSearchResultCard({ show }: { show: TmdbSearchTv }) {
     try {
       const result = await addToTvWatchlist(show.id, user.id)
       setState(result === 'added' ? 'added' : 'already')
+      if (result === 'added') onAdded?.()
     } catch {
       setState('error')
     }

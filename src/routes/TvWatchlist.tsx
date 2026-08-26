@@ -36,6 +36,10 @@ export default function TvWatchlist() {
   const [searchResults, setSearchResults] = useState<TmdbSearchTv[]>([])
   const [searchStatus, setSearchStatus] = useState<SearchStatus>('idle')
   const [searchError, setSearchError] = useState<string | null>(null)
+  // Bumped by TvSearchResultCard's onAdded — see the fetch effect below for
+  // why this exists (real-device testing found the Want grid going stale
+  // after an add via search).
+  const [refreshToken, setRefreshToken] = useState(0)
 
   useEffect(() => {
     const handle = setTimeout(() => setDebouncedQuery(query.trim()), 400)
@@ -82,7 +86,12 @@ export default function TvWatchlist() {
     return () => {
       cancelled = true
     }
-  }, [user, tab])
+    // refreshToken deliberately included: this effect otherwise only
+    // depends on [user, tab], so adding a show via the search box above
+    // (which doesn't touch either) left the grid showing stale ("Nothing
+    // queued yet") data even after a genuinely successful add — found via
+    // real-device testing, not a hypothetical.
+  }, [user, tab, refreshToken])
 
   return (
     <Page>
@@ -113,7 +122,7 @@ export default function TvWatchlist() {
           {searchStatus === 'success' && searchResults.length > 0 && (
             <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 sm:gap-3 lg:grid-cols-6 lg:gap-4">
               {searchResults.map((show) => (
-                <TvSearchResultCard key={show.id} show={show} />
+                <TvSearchResultCard key={show.id} show={show} onAdded={() => setRefreshToken((t) => t + 1)} />
               ))}
             </div>
           )}
